@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">EdgeX</string>
+    <string name="hide_status_bar_title">Hide Status Bar</string>
+    <string name="hide_status_bar_summary">Allows the webpage to display in the status bar area</string>
+    <string name="remove_bottom_padding_title">Remove Address Bar Bottom Padding</string>
+    <string name="long_click_overflow_button_to_top_title">Long press Overflow to scroll to top</string>
+    <string name="long_click_new_tab_button_to_load_inplace_title">Long press New Tab to load in-place</string>
+    <string name="long_click_new_tab_button_to_load_inplace_summary">Load the URL in current tab instead of creating a new one</string>
+    <string name="set_new_tab_page_url_title">Set New Tab Page URL</string>
+    <string name="confirm">Confirm</string>
+    <string name="module_disabled_tip">Please enable this module in LSPosed</string>
+    <string name="close">Close</string>
+</resources>
