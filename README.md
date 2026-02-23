@@ -1,5 +1,7 @@
 # EdgeX
 
+[![Stars](https://img.shields.io/github/stars/SoClear/EdgeX)](https://github.com/SoClear/EdgeX)
+
 [English](#english) | [中文](#中文)
 
 ---
@@ -34,6 +36,8 @@ The Set New Tab Page URL feature allows you to use "New Tab" extensions on your 
 4. Extract the Extension ID from the address bar (the unique string of characters in the URL).
 5. Open EdgeX and set the New Tab Page URL to `extension://[Extension ID]/[Entry File]` . For example: `extension://gjkmaoeddnpkgljohocjeejoofijgoib/index.html`
 
+> Pretty please, give [EdgeX](https://github.com/SoClear/EdgeX) a Star!
+
 ---
 
 ## 中文
@@ -65,3 +69,5 @@ The Set New Tab Page URL feature allows you to use "New Tab" extensions on your 
 3. 搜索并点击进入该新标签页扩展。
 4. 在地址栏提取扩展ID。
 5. 打开 **EdgeX** ，**设置新标签页 URL** 为 `extension://[扩展ID]/[扩展入口文件]` ，例如 `extension://gjkmaoeddnpkgljohocjeejoofijgoib/index.html`
+
+> 求求你了，给个 Star 吧 [EdgeX](https://github.com/SoClear/EdgeX)
