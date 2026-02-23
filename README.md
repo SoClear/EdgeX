@@ -32,7 +32,7 @@ The Set New Tab Page URL feature allows you to use "New Tab" extensions on your 
 2. Visit the Edge Add-ons Store.
 3. Search for and navigate to the desired extension's page.
 4. Extract the Extension ID from the address bar (the unique string of characters in the URL).
-5. Open EdgeX and set the New Tab Page URL to extension://[Extension ID]/[Entry File]. For example: extension://gjkmaoeddnpkgljohocjeejoofijgoib/index.html
+5. Open EdgeX and set the New Tab Page URL to `extension://[Extension ID]/[Entry File]` . For example: `extension://gjkmaoeddnpkgljohocjeejoofijgoib/index.html`
 
 ---
 
