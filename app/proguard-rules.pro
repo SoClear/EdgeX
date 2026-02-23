@@ -19,7 +19,9 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
--keep class io.github.soclear.edgex.hook.Main
+-keep class io.github.soclear.edgex.hook.Main {
+    <init>();
+}
 
 -keep class androidx.datastore.DataStoreFile {
     public static java.io.File dataStoreFile(android.content.Context, java.lang.String);
