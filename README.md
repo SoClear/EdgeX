@@ -31,9 +31,9 @@ An Xposed module for Microsoft Edge on Android, designed to enhance your browsin
 The Set New Tab Page URL feature allows you to use "New Tab" extensions on your mobile device:
 
 1. Install any New Tab extension, such as Rainbow Tab.
-2. Visit the Edge Add-ons Store.
+2. Visit [Edge-Extensions](https://microsoftedge.microsoft.com/addons/Microsoft-Edge-Extensions-Home)
 3. Search for and navigate to the desired extension's page.
-4. Extract the Extension ID from the address bar (the unique string of characters in the URL).
+4. Extract the extension ID from the address bar (a string of letters after the trailing `/`).
 5. Open EdgeX and set the New Tab Page URL to `extension://[Extension ID]/[Entry File]` . For example: `extension://gjkmaoeddnpkgljohocjeejoofijgoib/index.html`
 
 > Pretty please, give [EdgeX](https://github.com/SoClear/EdgeX) a Star!
@@ -67,7 +67,7 @@ The Set New Tab Page URL feature allows you to use "New Tab" extensions on your 
 1. 安装任意新标签页扩展，例如 Rainbow Tab - 彩虹标签页。
 2. 访问 [Edge-Extensions](https://microsoftedge.microsoft.com/addons/Microsoft-Edge-Extensions-Home)
 3. 搜索并点击进入该新标签页扩展。
-4. 在地址栏提取扩展ID。
+4. 在地址栏提取扩展ID（末尾 `/` 之后的一串字母）。
 5. 打开 **EdgeX** ，**设置新标签页 URL** 为 `extension://[扩展ID]/[扩展入口文件]` ，例如 `extension://gjkmaoeddnpkgljohocjeejoofijgoib/index.html`
 
 > 求求你了，给个 Star 吧 [EdgeX](https://github.com/SoClear/EdgeX)
