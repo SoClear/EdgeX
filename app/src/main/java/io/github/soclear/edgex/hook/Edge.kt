@@ -10,10 +10,10 @@ import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
-import kotlinx.serialization.Serializable
 import io.github.soclear.edgex.hook.util.HookConfig
 import io.github.soclear.edgex.hook.util.afterAttach
 import io.github.soclear.edgex.hook.util.getHookConfig
+import kotlinx.serialization.Serializable
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.query.enums.StringMatchType
 import org.luckypray.dexkit.result.MethodData
@@ -53,49 +53,26 @@ object Edge {
     /**
      * 设置新标签页 URL
      */
-    fun setNewTabPageUrl(url: String) {
-        afterAttach {
-            val hookConfig = getHookConfig { getHookConfigFromDexKit() }
-            if (hookConfig != null) {
-                val launchNtpMethod = try {
-                    DexMethod(hookConfig.methodLaunchNtp).getMethodInstance(classLoader)
-                } catch (_: NoSuchMethodException) {
-                    return@afterAttach
-                }
+    fun setNewTabPageUrl(customUrl: String) = afterAttach {
+        val loadUrlParamsClass = XposedHelpers.findClassIfExists(
+            "org.chromium.content_public.browser.LoadUrlParams",
+            classLoader
+        ) ?: return@afterAttach
 
-                if (hookConfig.launchUrlMethodName != null) {
-                    XposedBridge.hookMethod(
-                        launchNtpMethod, object : XC_MethodReplacement() {
-                            override fun replaceHookedMethod(param: MethodHookParam): Any? {
-                                XposedHelpers.callMethod(
-                                    param.args[0],
-                                    hookConfig.launchUrlMethodName,
-                                    param.args[2],
-                                    url
-                                )
-                                return null
-                            }
-                        }
-                    )
+        XposedBridge.hookAllConstructors(loadUrlParamsClass, object : XC_MethodHook() {
+            override fun beforeHookedMethod(param: MethodHookParam) {
+                val url = param.args.firstOrNull() as? String ?: return
 
-                }
-
-                if (hookConfig.methodLaunchUrl != null) {
-                    val methodLaunchUrl =
-                        DexMethod(hookConfig.methodLaunchUrl).getMethodInstance(classLoader)
-
-                    XposedBridge.hookMethod(
-                        launchNtpMethod, object : XC_MethodReplacement() {
-                            override fun replaceHookedMethod(param: MethodHookParam): Any? {
-                                methodLaunchUrl(param.thisObject, param.args[0], url)
-                                return null
-                            }
-                        }
-                    )
+                if (url == "chrome-native://newtab/" ||
+                    url == "edge://newtab/" ||
+                    url == "chrome://newtab/"
+                ) {
+                    param.args[0] = customUrl
                 }
             }
-        }
+        })
     }
+
 
     /**
      * 长按新建标签页按钮加载指定 url
