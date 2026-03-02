@@ -1,15 +1,38 @@
 package io.github.soclear.edgex.hook
 
+import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.AlertDialog
+import android.app.Application
+import android.app.DownloadManager
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.content.res.loader.ResourcesLoader
+import android.content.res.loader.ResourcesProvider
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.os.ParcelFileDescriptor
+import android.provider.Browser
+import android.text.TextUtils
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowInsetsController
+import android.webkit.URLUtil
+import android.widget.TextView
+import android.widget.Toast
+import androidx.core.net.toUri
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
+import io.github.soclear.edgex.R
 import io.github.soclear.edgex.hook.util.HookConfig
 import io.github.soclear.edgex.hook.util.afterAttach
 import io.github.soclear.edgex.hook.util.getHookConfig
@@ -19,9 +42,12 @@ import org.luckypray.dexkit.query.enums.StringMatchType
 import org.luckypray.dexkit.result.MethodData
 import org.luckypray.dexkit.wrap.DexField
 import org.luckypray.dexkit.wrap.DexMethod
+import java.io.File
+import java.lang.ref.WeakReference
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
+import kotlin.math.roundToInt
 
 
 object Edge {
@@ -216,6 +242,219 @@ object Edge {
                             }, 2000)
                             WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                         }
+                    }
+                }
+            }
+        )
+    }
+
+    fun externalDownload() = afterAttach {
+        var topActivityRef: WeakReference<Activity>? = null
+
+        val activityClass = XposedHelpers.findClassIfExists(
+            "android.app.Activity",
+            classLoader
+        )
+
+        if (activityClass != null) {
+            XposedHelpers.findAndHookMethod(
+                activityClass,
+                "onCreate",
+                Bundle::class.java,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        topActivityRef = WeakReference(param.thisObject as Activity)
+                    }
+                }
+            )
+        }
+
+        val downloadManagerService = XposedHelpers.findClassIfExists(
+            "org.chromium.chrome.browser.download.DownloadManagerService",
+            classLoader
+        ) ?: return@afterAttach
+
+        XposedHelpers.findAndHookMethod(
+            downloadManagerService,
+            "onDownloadItemCreated",
+            "org.chromium.chrome.browser.download.DownloadItem",
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    try {
+                        val downloadItem = param.args[0] ?: return
+
+                        // 从 DownloadItem.c 字段提取 DownloadInfo 对象
+                        val downloadInfo = XposedHelpers.getObjectField(downloadItem, "c") ?: return
+                        // 字段 v 为 0 表示任务处于 Starting/Pending 状态
+                        val downloadState = XposedHelpers.getIntField(downloadInfo, "v")
+                        // 只保留新建的下载
+                        if (downloadState != 0) return
+                        val mimeType = XposedHelpers.getObjectField(downloadInfo, "c") as String?
+                        // 排除插件
+                        if (mimeType == "application/x-chrome-extension") return
+
+                        // URL 是 GURL 对象，需要调用 .j() 获取字符串
+                        val gurlUrl = XposedHelpers.getObjectField(downloadInfo, "a")
+                        val url = XposedHelpers.callMethod(gurlUrl, "j") as String
+
+                        val userAgent = XposedHelpers.getObjectField(downloadInfo, "b") as String?
+                        val cookie = XposedHelpers.getObjectField(downloadInfo, "d") as String?
+                        val fileName = XposedHelpers.getObjectField(downloadInfo, "e") as String?
+
+                        val gurlReferrer = XposedHelpers.getObjectField(downloadInfo, "h")
+                        val referrer = XposedHelpers.callMethod(gurlReferrer, "j") as String?
+
+                        val activity = topActivityRef?.get() ?: return
+                        if (activity.isFinishing) return
+                        Handler(Looper.getMainLooper()).post {
+                            AlertDialog.Builder(activity)
+                                .setTitle(getString(R.string.download_title))
+                                .setView(TextView(activity).apply {
+                                    text = Uri.decode(url)
+                                    // 16dp
+                                    val padding = (16 * resources.displayMetrics.density).roundToInt()
+                                    setPadding(padding, padding, padding, 0)
+                                    // 防止链接太长占满屏幕
+                                    maxLines = 5
+                                    ellipsize = TextUtils.TruncateAt.END
+                                })
+                                .setPositiveButton(getString(R.string.download_system)) { _, _ ->
+                                    val uri = url.toUri()
+                                    val request = DownloadManager.Request(uri).apply {
+                                        if (!cookie.isNullOrEmpty()) addRequestHeader(
+                                            "Cookie",
+                                            cookie
+                                        )
+                                        if (!userAgent.isNullOrEmpty()) addRequestHeader(
+                                            "User-Agent",
+                                            userAgent
+                                        )
+                                        if (!referrer.isNullOrEmpty()) addRequestHeader(
+                                            "Referer",
+                                            referrer
+                                        )
+                                        if (!mimeType.isNullOrEmpty()) setMimeType(mimeType)
+                                        // 新下载的 fileName 总是空字符串，不知道为什么
+                                        val finalFileName = if (fileName.isNullOrEmpty()) {
+                                            // 从 url 中提取文件名
+                                            URLUtil.guessFileName(url, null, mimeType)
+                                        } else {
+                                            fileName
+                                        }
+                                        setTitle(finalFileName)
+                                        setDescription(getString(R.string.download_downloading))
+                                        setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                        setDestinationInExternalPublicDir(
+                                            Environment.DIRECTORY_DOWNLOADS,
+                                            finalFileName
+                                        )
+                                        setAllowedOverMetered(true)
+                                        setAllowedOverRoaming(true)
+                                    }
+
+                                    val downloadManager =
+                                        activity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                                    downloadManager.enqueue(request)
+                                }
+                                .setNegativeButton(getString(R.string.download_third_party)) { _, _ ->
+                                    try {
+                                        val uri = url.toUri()
+                                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+                                            // 【核心新增】安全地设置 Uri 和 MimeType
+                                            if (!mimeType.isNullOrEmpty()) {
+                                                setDataAndType(uri, mimeType)
+                                            } else {
+                                                data = uri // 如果没有 mimeType，仅设置 uri
+                                            }
+
+                                            val headers = Bundle().apply {
+                                                if (!cookie.isNullOrEmpty()) putString(
+                                                    "Cookie",
+                                                    cookie
+                                                )
+                                                if (!userAgent.isNullOrEmpty()) putString(
+                                                    "User-Agent",
+                                                    userAgent
+                                                )
+                                                if (!referrer.isNullOrEmpty()) putString(
+                                                    "Referer",
+                                                    referrer
+                                                )
+                                            }
+                                            putExtra(Browser.EXTRA_HEADERS, headers)
+                                        }
+
+                                        val chooser =
+                                            Intent.createChooser(
+                                                intent,
+                                                getString(R.string.download_chooser_title)
+                                            )
+                                        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        activity.startActivity(chooser)
+
+                                    } catch (_: ActivityNotFoundException) {
+                                        Toast.makeText(
+                                            activity,
+                                            getString(R.string.download_no_app_found),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    } catch (t: Throwable) {
+                                        XposedBridge.log(t)
+                                    }
+                                }
+                                .setNeutralButton(getString(R.string.download_copy_link)) { _, _ ->
+                                    val clipboard =
+                                        activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText(
+                                        getString(R.string.download_clipboard_label),
+                                        url
+                                    )
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(
+                                        activity,
+                                        getString(R.string.download_copied_toast),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                                .show()
+                        }
+
+                    } catch (t: Throwable) {
+                        XposedBridge.log(t)
+                    }
+                }
+            }
+        )
+    }
+
+    fun addAssetPath(modulePath: String) {
+        XposedHelpers.findAndHookMethod(
+            Application::class.java,
+            "attach",
+            Context::class.java,
+            object : XC_MethodHook() {
+                @SuppressLint("ObsoleteSdkInt")
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        val context = param.args[0] as Context
+                        val loader = ResourcesLoader()
+                        val moduleFile = File(modulePath)
+                        val parcelFileDescriptor = ParcelFileDescriptor.open(
+                            moduleFile,
+                            ParcelFileDescriptor.MODE_READ_ONLY
+                        )
+                        val provider = ResourcesProvider.loadFromApk(parcelFileDescriptor)
+                        loader.addProvider(provider)
+                        context.resources.addLoaders(loader)
+                    } else {
+                        val context = param.args[0] as Context
+                        XposedHelpers.callMethod(
+                            context.assets,
+                            "addAssetPath",
+                            modulePath
+                        )
                     }
                 }
             }

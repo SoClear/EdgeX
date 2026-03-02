@@ -59,6 +59,9 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // 防止资源 ID 互相冲突，避开 0x7f
+    androidResources.additionalParameters += listOf("--allow-reserved-package-id", "--package-id", "0x64")
 }
 
 dependencies {

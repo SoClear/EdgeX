@@ -10,4 +10,5 @@ data class Preference(
     val longClickNewTabButtonToLoadInplace: Boolean = false,
     val setNewTabPageUrl: Boolean = false,
     val newTabPageUrl: String = "edge://newtab/",
+    val externalDownload: Boolean = false,
 )

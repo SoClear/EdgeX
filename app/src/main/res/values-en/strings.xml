@@ -10,4 +10,15 @@
     <string name="confirm">Confirm</string>
     <string name="module_disabled_tip">Please enable this module in LSPosed</string>
     <string name="close">Close</string>
+    <string name="download_title">External Download</string>
+    <string name="download_system">System Downloader</string>
+    <string name="download_downloading">Downloading…</string>
+    <string name="download_third_party">Third-party App</string>
+    <string name="download_chooser_title">Choose downloader or player</string>
+    <string name="download_no_app_found">No app found to handle this link</string>
+    <string name="download_copy_link">Copy Link</string>
+    <string name="download_clipboard_label">Download Link</string>
+    <string name="download_copied_toast">Download link copied to clipboard</string>
+    <string name="download_external_title">Support external download</string>
+    <string name="download_external_summary">After clicking the Cancel button in the download dialog box, you will see the external download dialog box below.</string>
 </resources>

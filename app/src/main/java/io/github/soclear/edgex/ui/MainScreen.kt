@@ -114,7 +114,6 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                             viewModel.updateData { currentPreference ->
                                 currentPreference.copy(newTabPageUrl = tempNewTabPageUrl)
                             }
-
                         }
                     ) {
                         Text(text = stringResource(id = R.string.confirm))
@@ -122,6 +121,16 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+        SwitchItem(
+            title = stringResource(id = R.string.download_external_title),
+            summary = stringResource(id = R.string.download_external_summary),
+            checked = preference.externalDownload,
+            onCheckedChange = {
+                viewModel.updateData { currentPreference ->
+                    currentPreference.copy(externalDownload = it)
+                }
+            }
+        )
     }
 }
 
