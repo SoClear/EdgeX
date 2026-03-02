@@ -25,8 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.soclear.edgex.MainViewModel
 import io.github.soclear.edgex.R
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
