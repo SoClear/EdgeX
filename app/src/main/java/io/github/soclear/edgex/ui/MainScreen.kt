@@ -2,16 +2,28 @@ package io.github.soclear.edgex.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.soclear.edgex.MainViewModel
 import io.github.soclear.edgex.R
+import io.github.soclear.edgex.data.DownloaderType
 
 @Composable
 fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
@@ -119,16 +132,81 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
-        SwitchItem(
-            title = stringResource(id = R.string.download_external_title),
-            summary = stringResource(id = R.string.download_external_summary),
-            checked = preference.externalDownload,
-            onCheckedChange = {
-                viewModel.updateData { currentPreference ->
-                    currentPreference.copy(externalDownload = it)
+        Column {
+            var expanded by rememberSaveable { mutableStateOf(false) }
+
+            SwitchItem(
+                title = stringResource(id = R.string.download_external_title),
+                summary = stringResource(id = R.string.download_external_summary),
+                clickable = true,
+                onClick = { expanded = !expanded },
+                checked = preference.externalDownload,
+                onCheckedChange = {
+                    viewModel.updateData { currentPreference ->
+                        currentPreference.copy(externalDownload = it)
+                    }
+                }
+            )
+            AnimatedVisibility(expanded && preference.externalDownload) {
+                Column {
+                    SwitchItem(
+                        title = stringResource(id = R.string.download_block_original_download_dialog_title),
+                        checked = preference.blockOriginalDownloadDialog,
+                        onCheckedChange = {
+                            viewModel.updateData { currentPreference ->
+                                currentPreference.copy(blockOriginalDownloadDialog = it)
+                            }
+                        }
+                    )
+                    // 控制弹窗显示隐藏的状态
+                    var showDialog by rememberSaveable { mutableStateOf(false) }
+
+                    SwitchItem(
+                        title = stringResource(id = R.string.download_set_default_downloader),
+                        summary = if (preference.setDefaultDownloader) {
+                            when (preference.defaultDownloaderType) {
+                                DownloaderType.SYSTEM_DOWNLOADER -> stringResource(R.string.download_system)
+                                DownloaderType.THIRD_PARTY_APP -> preference.defaultDownloaderPackageName
+                            }
+                        } else {
+                            null
+                        },
+                        clickable = true,
+                        onClick = {
+                            if (preference.setDefaultDownloader) {
+                                showDialog = true
+                            }
+                        },
+                        checked = preference.setDefaultDownloader,
+                        onCheckedChange = { isChecked ->
+                            viewModel.updateData { currentPreference ->
+                                currentPreference.copy(setDefaultDownloader = isChecked)
+                            }
+                        }
+                    )
+
+                    if (showDialog) {
+                        DownloaderConfigDialog(
+                            initialType = preference.defaultDownloaderType,
+                            initialPackageName = preference.defaultDownloaderPackageName,
+                            onDismiss = {
+                                showDialog = false // 取消时只关闭弹窗
+                            },
+                            onConfirm = { newType, newPackageName ->
+                                showDialog = false // 确认时关闭弹窗
+                                // 保存数据到 DataStore
+                                viewModel.updateData { currentPreference ->
+                                    currentPreference.copy(
+                                        defaultDownloaderType = newType,
+                                        defaultDownloaderPackageName = newPackageName
+                                    )
+                                }
+                            }
+                        )
+                    }
                 }
             }
-        )
+        }
     }
 }
 
@@ -149,5 +227,122 @@ fun ModuleDisabledScreen(
         ) {
             Text(text = stringResource(R.string.close))
         }
+    }
+}
+
+@Composable
+fun DownloaderConfigDialog(
+    initialType: DownloaderType,
+    initialPackageName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (DownloaderType, String) -> Unit
+) {
+    var tempType by remember { mutableStateOf(initialType) }
+    var tempPackageName by remember { mutableStateOf(initialPackageName) }
+
+    // 新增：记录输入框是否显示错误状态
+    var isPackageNameError by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = stringResource(R.string.download_select_default_downloader))
+        },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                DialogOptionRow(
+                    text = stringResource(R.string.download_system),
+                    selected = tempType == DownloaderType.SYSTEM_DOWNLOADER,
+                    onClick = {
+                        tempType = DownloaderType.SYSTEM_DOWNLOADER
+                        isPackageNameError = false // 切换选项时清除错误
+                    }
+                )
+
+                DialogOptionRow(
+                    text = stringResource(R.string.download_specify_third_party_app),
+                    selected = tempType == DownloaderType.THIRD_PARTY_APP,
+                    onClick = { tempType = DownloaderType.THIRD_PARTY_APP }
+                )
+
+                AnimatedVisibility(
+                    visible = tempType == DownloaderType.THIRD_PARTY_APP,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    OutlinedTextField(
+                        value = tempPackageName,
+                        onValueChange = {
+                            tempPackageName = it
+                            // 用户开始输入时，自动清除错误提示
+                            if (it.isNotBlank()) isPackageNameError = false
+                        },
+                        label = { Text(stringResource(R.string.download_enter_package_name)) },
+                        placeholder = { Text(stringResource(R.string.download_package_name_example)) },
+                        singleLine = true,
+                        // 绑定错误状态
+                        isError = isPackageNameError,
+                        // 错误时的底部提示文本
+                        supportingText = {
+                            if (isPackageNameError) {
+                                Text(
+                                    text = stringResource(R.string.download_package_name_empty_error),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp, start = 8.dp, end = 8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    // 校验逻辑：如果是第三方应用，且包名为空（或全是空格）
+                    if (tempType == DownloaderType.THIRD_PARTY_APP && tempPackageName.isBlank()) {
+                        isPackageNameError = true // 触发错误提示，拦截确认事件
+                    } else {
+                        isPackageNameError = false
+                        // 校验通过，传出数据并关闭弹窗（修剪掉首尾多余空格）
+                        onConfirm(tempType, tempPackageName.trim())
+                    }
+                }
+            ) {
+                Text(stringResource(R.string.confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun DialogOptionRow(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = null
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge
+        )
     }
 }

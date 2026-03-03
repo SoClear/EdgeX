@@ -44,7 +44,12 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
             Edge.setNewTabPageUrl(preference.newTabPageUrl)
         }
         if (preference.externalDownload) {
-            Edge.externalDownload()
+            Edge.externalDownload(
+                preference.blockOriginalDownloadDialog,
+                preference.setDefaultDownloader,
+                preference.defaultDownloaderType,
+                preference.defaultDownloaderPackageName
+            )
         }
     }
 }

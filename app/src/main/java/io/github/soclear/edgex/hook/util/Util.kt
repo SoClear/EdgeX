@@ -13,6 +13,7 @@ import de.robv.android.xposed.XposedHelpers.callStaticMethod
 import de.robv.android.xposed.XposedHelpers.findAndHookMethod
 import de.robv.android.xposed.XposedHelpers.findClass
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import java.lang.reflect.Field
 import kotlin.jvm.java
 
 fun getSystemContext(): Context {
@@ -45,6 +46,17 @@ fun afterAttach(action: Context.() -> Unit) {
     }
     findAndHookMethod(Application::class.java, "attach", Context::class.java, callback)
 }
+
+val Class<*>.allFields: List<Field>
+    get() {
+        val fields = mutableListOf<Field>()
+        var current: Class<*>? = this
+        while (current != null) {
+            fields.addAll(current.declaredFields)
+            current = current.superclass
+        }
+        return fields
+    }
 
 fun xlog(string: String) {
     val result = "\n\n////////////////\n\n////////////////\n\n$string\n\n////////////////\n\n"
