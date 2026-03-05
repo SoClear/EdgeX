@@ -75,9 +75,7 @@ object Edge {
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     if (param.thisObject.javaClass.name == "org.chromium.ui.edge_to_edge.layout.EdgeToEdgeBaseLayout") {
-                        param.args[0] = 0
-                        param.args[1] = 0
-                        param.args[2] = 0
+                        // bottom
                         param.args[3] = 0
                     }
                 }
