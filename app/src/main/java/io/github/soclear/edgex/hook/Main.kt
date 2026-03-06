@@ -29,9 +29,7 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
         if (preference.hideStatusBar) {
             Edge.hideStatusBar()
         }
-        if (preference.removeBottomPadding) {
-            Edge.removeBottomPadding()
-        }
+        Edge.removePadding(preference.removeTopPadding, preference.removeBottomPadding)
         if (preference.longClickOverflowButtonToTop) {
             Edge.setupScrollToTopOnLongClickOverflowButton()
         }

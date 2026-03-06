@@ -2,7 +2,8 @@
     <string name="app_name">EdgeX</string>
     <string name="hide_status_bar_title">Hide Status Bar</string>
     <string name="hide_status_bar_summary">Allows the webpage to display in the status bar area</string>
-    <string name="remove_bottom_padding_title">Remove Address Bar Bottom Padding</string>
+    <string name="remove_top_padding_title">Remove top padding</string>
+    <string name="remove_bottom_padding_title">Remove bottom padding</string>
     <string name="long_click_overflow_button_to_top_title">Long press Overflow to scroll to top</string>
     <string name="long_click_new_tab_button_to_load_inplace_title">Long press New Tab to load in-place</string>
     <string name="long_click_new_tab_button_to_load_inplace_summary">Load the URL in current tab instead of creating a new one</string>

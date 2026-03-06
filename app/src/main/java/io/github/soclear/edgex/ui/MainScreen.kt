@@ -55,6 +55,15 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             }
         )
         SwitchItem(
+            title = stringResource(id = R.string.remove_top_padding_title),
+            checked = preference.removeTopPadding,
+            onCheckedChange = {
+                viewModel.updateData { currentPreference ->
+                    currentPreference.copy(removeTopPadding = it)
+                }
+            }
+        )
+        SwitchItem(
             title = stringResource(id = R.string.remove_bottom_padding_title),
             checked = preference.removeBottomPadding,
             onCheckedChange = {

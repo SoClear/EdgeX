@@ -62,9 +62,10 @@ import kotlin.math.roundToInt
 object Edge {
 
     /**
-     * 移除底部 padding
+     * 移除 padding
      */
-    fun removeBottomPadding() {
+    fun removePadding(top: Boolean, bottom: Boolean) {
+        if (!top && !bottom) return
         XposedHelpers.findAndHookMethod(
             View::class.java,
             "setPadding",
@@ -75,8 +76,12 @@ object Edge {
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     if (param.thisObject.javaClass.name == "org.chromium.ui.edge_to_edge.layout.EdgeToEdgeBaseLayout") {
-                        // bottom
-                        param.args[3] = 0
+                        if (top) {
+                            param.args[1] = 0
+                        }
+                        if (bottom) {
+                            param.args[3] = 0
+                        }
                     }
                 }
             }
