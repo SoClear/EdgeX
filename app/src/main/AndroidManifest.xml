@@ -32,7 +32,7 @@
             android:value="93" />
         <meta-data
             android:name="xposedscope"
-            android:value="com.microsoft.emmx" />
+            android:resource="@array/xposed_scope" />
     </application>
 
 </manifest>

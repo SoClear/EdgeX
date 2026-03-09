@@ -20,7 +20,11 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
 
         val preference = PreferenceProvider.preference ?: return
 
-        if (lpparam.packageName != "com.microsoft.emmx") {
+        if (lpparam.packageName != "com.microsoft.emmx" &&
+            lpparam.packageName != "com.microsoft.emmx.beta" &&
+            lpparam.packageName != "com.microsoft.emmx.canary" &&
+            lpparam.packageName != "com.microsoft.emmx.dev"
+        ) {
             return
         }
 
