@@ -7,11 +7,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -42,8 +40,7 @@ import io.github.soclear.edgex.data.DownloaderType
 @Composable
 fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val preference by viewModel.preference.collectAsStateWithLifecycle()
-
-    Column(modifier = modifier) {
+    Column(modifier = modifier.verticalScroll(rememberScrollState())) {
         SwitchItem(
             title = stringResource(id = R.string.hide_status_bar_title),
             summary = stringResource(id = R.string.hide_status_bar_summary),
@@ -215,26 +212,6 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun ModuleDisabledScreen(
-    onClickClose: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text = stringResource(R.string.module_disabled_tip))
-        Button(
-            onClick = onClickClose,
-            modifier = Modifier.padding(top = 10.dp)
-        ) {
-            Text(text = stringResource(R.string.close))
         }
     }
 }

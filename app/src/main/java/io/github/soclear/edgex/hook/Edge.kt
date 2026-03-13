@@ -1,9 +1,7 @@
 package io.github.soclear.edgex.hook
 
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
-import android.app.Application
 import android.app.Dialog
 import android.app.DownloadManager
 import android.content.ActivityNotFoundException
@@ -12,42 +10,49 @@ import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.res.loader.ResourcesLoader
-import android.content.res.loader.ResourcesProvider
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
-import android.os.ParcelFileDescriptor
 import android.provider.Browser
 import android.text.TextUtils
 import android.view.KeyEvent
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.view.WindowInsetsController
 import android.webkit.URLUtil
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.ComponentDialog
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.ui.platform.ComposeView
 import androidx.core.net.toUri
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
+import io.github.soclear.edgex.MainViewModel
+import io.github.soclear.edgex.MainViewModelFactory
 import io.github.soclear.edgex.R
 import io.github.soclear.edgex.data.DownloaderType
 import io.github.soclear.edgex.hook.util.HookConfig
 import io.github.soclear.edgex.hook.util.afterAttach
 import io.github.soclear.edgex.hook.util.allFields
 import io.github.soclear.edgex.hook.util.getHookConfig
+import io.github.soclear.edgex.hook.util.patchComposeRecursion
+import io.github.soclear.edgex.ui.MainScreen
+import io.github.soclear.edgex.ui.theme.EdgeXTheme
 import kotlinx.serialization.Serializable
 import org.luckypray.dexkit.DexKitBridge
 import org.luckypray.dexkit.query.enums.StringMatchType
 import org.luckypray.dexkit.result.MethodData
 import org.luckypray.dexkit.wrap.DexField
 import org.luckypray.dexkit.wrap.DexMethod
-import java.io.File
 import java.lang.ref.WeakReference
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -717,36 +722,85 @@ object Edge {
         )
     }
 
-    fun addAssetPath(modulePath: String) {
-        XposedHelpers.findAndHookMethod(
-            Application::class.java,
-            "attach",
-            Context::class.java,
-            object : XC_MethodHook() {
-                @SuppressLint("ObsoleteSdkInt")
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        val context = param.args[0] as Context
-                        val loader = ResourcesLoader()
-                        val moduleFile = File(modulePath)
-                        val parcelFileDescriptor = ParcelFileDescriptor.open(
-                            moduleFile,
-                            ParcelFileDescriptor.MODE_READ_ONLY
-                        )
-                        val provider = ResourcesProvider.loadFromApk(parcelFileDescriptor)
-                        loader.addProvider(provider)
-                        context.resources.addLoaders(loader)
-                    } else {
-                        val context = param.args[0] as Context
-                        XposedHelpers.callMethod(
-                            context.assets,
-                            "addAssetPath",
-                            modulePath
-                        )
+    /**
+     * 在 Edge 设置页面的工具栏添加菜单按钮
+     */
+    fun addSettingsButtonToToolbar() = afterAttach {
+        // 【关键步骤】获取模块的 ClassLoader，并立即执行修复
+        val moduleClassLoader = MainViewModel::class.java.classLoader
+        if (moduleClassLoader != null) {
+            patchComposeRecursion(moduleClassLoader)
+        }
+
+        val targetClass = "org.chromium.chrome.browser.edge_settings.EdgeSettingsActivity"
+        val menuItemId = 10001
+
+        val hookMenu = object : XC_MethodHook() {
+            override fun afterHookedMethod(param: MethodHookParam) {
+                if (param.thisObject.javaClass.name != targetClass) return
+                try {
+                    val menu = param.args[0] as Menu
+                    if (menu.findItem(menuItemId) == null) {
+                        // 插入按钮
+                        val item = menu.add(Menu.NONE, menuItemId, Menu.NONE, "EDGEX")
+                        item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
                     }
+                } catch (e: Exception) {
+                    XposedBridge.log(e)
                 }
             }
-        )
+        }
+
+        // Hook Activity 基类以确保捕捉到所有子类的菜单创建过程（即使子类没有重写这些方法）
+        val classActivity = Activity::class.java
+        XposedHelpers.findAndHookMethod(classActivity, "onCreateOptionsMenu", Menu::class.java, hookMenu)
+        XposedHelpers.findAndHookMethod(classActivity, "onPrepareOptionsMenu", Menu::class.java, hookMenu)
+
+        val clazz = XposedHelpers.findClassIfExists(targetClass, classLoader) ?: return@afterAttach
+        XposedHelpers.findAndHookMethod(clazz, "onOptionsItemSelected", MenuItem::class.java, object : XC_MethodHook() {
+            override fun beforeHookedMethod(param: MethodHookParam) {
+                val menuItem = param.args[0] as MenuItem
+                if (menuItem.itemId == menuItemId) {
+                    val activity = param.thisObject as Activity
+                    showModuleSettingsDialog(activity)
+                    param.result = true
+                }
+            }
+        })
+    }
+
+    private fun showModuleSettingsDialog(activity: Activity) {
+        Handler(Looper.getMainLooper()).post {
+            try {
+                // ComponentDialog 自身就是完美的 LifecycleOwner
+                val dialog = ComponentDialog(
+                    activity,
+                    android.R.style.Theme_DeviceDefault_Dialog_NoActionBar
+                )
+
+                // 只需要基本的 ContextWrapper 保证资源加载正常
+                val moduleContext = object : android.view.ContextThemeWrapper(activity, android.R.style.Theme_DeviceDefault_Dialog_NoActionBar) {
+                    override fun getClassLoader(): ClassLoader = MainViewModel::class.java.classLoader!!
+                }
+
+                // 实例化你的 ViewModel
+                val viewModel = MainViewModelFactory(activity.application).create(MainViewModel::class.java)
+
+                // 使用我们的安全容器包裹 Compose
+                dialog.setContentView(ComposeView(moduleContext).apply {
+                    setContent {
+                        EdgeXTheme {
+                            Scaffold(modifier = androidx.compose.ui.Modifier.fillMaxWidth()) { innerPadding ->
+                                MainScreen(viewModel = viewModel, modifier = androidx.compose.ui.Modifier.padding(innerPadding))
+                            }
+                        }
+                    }
+                })
+                dialog.show()
+            } catch (e: Exception) {
+                XposedBridge.log(e)
+            }
+        }
     }
 
     @Serializable

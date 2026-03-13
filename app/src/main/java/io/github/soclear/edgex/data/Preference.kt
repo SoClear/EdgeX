@@ -16,4 +16,8 @@ data class Preference(
     val setDefaultDownloader: Boolean = false,
     val defaultDownloaderType: DownloaderType = DownloaderType.SYSTEM_DOWNLOADER,
     val defaultDownloaderPackageName: String = ""
-)
+){
+    companion object {
+        const val FILE_NAME = "EdgeXPreference.json"
+    }
+}

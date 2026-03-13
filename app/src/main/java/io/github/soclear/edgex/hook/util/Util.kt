@@ -5,16 +5,22 @@ import android.app.Application
 import android.content.Context
 import android.content.Context.CONTEXT_IGNORE_SECURITY
 import android.content.Context.MODE_PRIVATE
+import android.content.ContextWrapper
 import android.content.SharedPreferences
+import android.content.res.loader.ResourcesLoader
+import android.content.res.loader.ResourcesProvider
+import android.os.ParcelFileDescriptor
 import de.robv.android.xposed.XC_MethodHook
+import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers.callMethod
 import de.robv.android.xposed.XposedHelpers.callStaticMethod
 import de.robv.android.xposed.XposedHelpers.findAndHookMethod
 import de.robv.android.xposed.XposedHelpers.findClass
+import de.robv.android.xposed.XposedHelpers.findClassIfExists
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
+import java.io.File
 import java.lang.reflect.Field
-import kotlin.jvm.java
 
 fun getSystemContext(): Context {
     val activityThreadClass = findClass("android.app.ActivityThread", null)
@@ -57,6 +63,53 @@ val Class<*>.allFields: List<Field>
         }
         return fields
     }
+
+fun addAssetPath(modulePath: String) {
+    findAndHookMethod(
+        ContextWrapper::class.java,
+        "attachBaseContext",
+        Context::class.java,
+        object : XC_MethodHook() {
+            override fun afterHookedMethod(param: MethodHookParam) {
+                val context = param.thisObject as Context
+                if (context !is Application) return
+                try {
+                    val moduleApk = File(modulePath)
+                    val parcelFileDescriptor = ParcelFileDescriptor.open(moduleApk, ParcelFileDescriptor.MODE_READ_ONLY)
+                    val resourcesProvider = ResourcesProvider.loadFromApk(parcelFileDescriptor)
+                    val resourcesLoader = ResourcesLoader()
+                    resourcesLoader.addProvider(resourcesProvider)
+                    context.resources.addLoaders(resourcesLoader)
+                } catch (t: Throwable) {
+                    XposedBridge.log(t)
+                }
+            }
+        }
+    )
+}
+
+fun patchComposeRecursion(classLoader: ClassLoader) {
+    try {
+        // 1. 找到 Compose 内部引发崩溃的那个类
+        // 注意：这个类在 androidx.compose.ui.platform 包下
+        val targetClass = findClassIfExists(
+            "androidx.compose.ui.platform.AndroidComposeView",
+            classLoader
+        )
+
+        if (targetClass != null) {
+            // 2. 彻底替换这个导致死循环的方法
+            findAndHookMethod(
+                targetClass,
+                "findViewByAccessibilityIdTraversal",
+                Int::class.javaPrimitiveType, // 参数是一个 int 类型的 ID
+                XC_MethodReplacement.returnConstant(null)
+            )
+        }
+    } catch (t: Throwable) {
+        XposedBridge.log(t)
+    }
+}
 
 fun xlog(string: String) {
     val result = "\n\n////////////////\n\n////////////////\n\n$string\n\n////////////////\n\n"

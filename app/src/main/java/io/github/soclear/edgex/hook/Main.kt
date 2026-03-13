@@ -3,8 +3,10 @@ package io.github.soclear.edgex.hook
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.IXposedHookZygoteInit
 import de.robv.android.xposed.callbacks.XC_LoadPackage
-import io.github.soclear.edgex.BuildConfig
-import io.github.soclear.edgex.hook.util.PreferenceProvider
+import io.github.soclear.edgex.data.Preference
+import io.github.soclear.edgex.hook.util.addAssetPath
+import kotlinx.serialization.json.Json
+import java.io.File
 
 class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
     private lateinit var modulePath: String
@@ -14,12 +16,6 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
     }
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
-        if (lpparam.packageName == BuildConfig.APPLICATION_ID) {
-            Self.enableDataStoreFileSharing(lpparam)
-        }
-
-        val preference = PreferenceProvider.preference ?: return
-
         if (lpparam.packageName != "com.microsoft.emmx" &&
             lpparam.packageName != "com.microsoft.emmx.beta" &&
             lpparam.packageName != "com.microsoft.emmx.canary" &&
@@ -28,7 +24,15 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
             return
         }
 
-        Edge.addAssetPath(modulePath)
+        addAssetPath(modulePath)
+        Edge.addSettingsButtonToToolbar()
+
+        val preference: Preference = try {
+            val dataStoreFile = File(lpparam.appInfo.dataDir, "files/datastore/${Preference.FILE_NAME}")
+            Json.decodeFromString<Preference>(dataStoreFile.readText())
+        } catch (_: Exception) {
+            null
+        } ?: return
 
         if (preference.hideStatusBar) {
             Edge.hideStatusBar()
