@@ -2,6 +2,7 @@ package io.github.soclear.edgex.hook
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.AndroidAppHelper
 import android.app.Dialog
 import android.app.DownloadManager
 import android.content.ActivityNotFoundException
@@ -275,8 +276,7 @@ object Edge {
 
         XposedHelpers.findAndHookMethod(
             Activity::class.java,
-            "onCreate",
-            Bundle::class.java,
+            "onResume",
             object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     topActivityRef = WeakReference(param.thisObject as Activity)
@@ -328,7 +328,9 @@ object Edge {
                         // 排除插件
                         if (mimeType == "application/x-chrome-extension") return
                         val activity = topActivityRef?.get() ?: return
-                        if (activity.isFinishing) return
+                        val isValidActivity = !activity.isFinishing && !activity.isDestroyed
+                        // 如果获取不到活着的 Activity，尝试使用全局 ApplicationContext
+                        val context: Context = (if (isValidActivity) activity else AndroidAppHelper.currentApplication()) ?: return
 
                         if (blockOriginalDownloadDialog) {
                             // 主动取消 Edge 的内部下载，防止弹出通知
@@ -372,7 +374,7 @@ object Edge {
                                     referrer,
                                     mimeType,
                                     fileName,
-                                    activity
+                                    context
                                 )
                             } else {
                                 thirdPartyDownload(
@@ -381,7 +383,7 @@ object Edge {
                                     cookie,
                                     userAgent,
                                     referrer,
-                                    activity,
+                                    context,
                                     defaultDownloaderPackageName
                                 )
                             }
@@ -513,7 +515,7 @@ object Edge {
                     referrer: String?,
                     mimeType: String?,
                     fileName: String?,
-                    activity: Activity
+                    context: Context
                 ) {
                     val uri = url.toUri()
                     val request = DownloadManager.Request(uri).apply {
@@ -542,7 +544,7 @@ object Edge {
                     }
 
                     val downloadManager =
-                        activity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                        context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                     downloadManager.enqueue(request)
                 }
 
@@ -552,7 +554,7 @@ object Edge {
                     cookie: String?,
                     userAgent: String?,
                     referrer: String?,
-                    activity: Activity,
+                    context: Context,
                     targetPackageName: String?
                 ) {
                     try {
@@ -592,11 +594,11 @@ object Edge {
                                     getString(R.string.download_chooser_title)
                                 )
                             chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            activity.startActivity(chooser)
+                            context.startActivity(chooser)
                         } else {
                             // 指定了包名
                             intent.setPackage(targetPackageName)
-                            val pm = activity.packageManager
+                            val pm = context.packageManager
 
                             // 局部函数：寻找目标并用 ApplicationContext 强制启动
                             val tryForceLaunch = { testIntent: Intent ->
@@ -609,7 +611,7 @@ object Edge {
                                     )
 
                                     // 使用 applicationContext 绕过 Edge 浏览器对 startActivity 的拦截
-                                    activity.applicationContext.startActivity(testIntent)
+                                    context.applicationContext.startActivity(testIntent)
                                     true
                                 } else {
                                     false
@@ -633,7 +635,7 @@ object Edge {
 
                             if (!isLaunched) {
                                 Toast.makeText(
-                                    activity,
+                                    context,
                                     getString(R.string.download_target_app_failed),
                                     Toast.LENGTH_SHORT
                                 ).show()
@@ -641,7 +643,7 @@ object Edge {
                         }
                     } catch (_: ActivityNotFoundException) {
                         Toast.makeText(
-                            activity,
+                            context,
                             getString(R.string.download_no_app_found),
                             Toast.LENGTH_SHORT
                         ).show()
