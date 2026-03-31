@@ -57,5 +57,9 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
                 preference.defaultDownloaderPackageName
             )
         }
+
+        if (preference.longClickNewTabButtonToLoadInplace && preference.replaceNewTabPageWithHome) {
+            Edge.replaceNewTabPageWithHome()
+        }
     }
 }

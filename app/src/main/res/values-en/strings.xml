@@ -8,6 +8,8 @@
     <string name="long_click_new_tab_button_to_load_inplace_title">Long press New Tab to load in-place</string>
     <string name="long_click_new_tab_button_to_load_inplace_summary">Load the URL in current tab instead of creating a new one</string>
     <string name="set_new_tab_page_url_title">Set New Tab Page URL</string>
+    <string name="replace_new_tab_page_with_home_title">Replace New Tab button with Home button</string>
+    <string name="replace_new_tab_page_with_home_summary">Tap to go Home, long-press to open a new tab. Requires "Long press New Tab to load in-place" to be enabled.</string>
     <string name="confirm">Confirm</string>
     <string name="module_disabled_tip">Please enable this module in LSPosed</string>
     <string name="close">Close</string>

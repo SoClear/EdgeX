@@ -1,5 +1,6 @@
 package io.github.soclear.edgex.hook
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.AndroidAppHelper
@@ -22,8 +23,10 @@ import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowInsetsController
 import android.webkit.URLUtil
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -227,6 +230,89 @@ object Edge {
                 rootView.dispatchKeyEvent(upEvent)
 
                 return true
+            }
+        })
+    }
+
+    // 定义一个标记接口，用于防止循环替换
+    private interface EdgeXSwappedListener
+
+    // 将 Plus 按钮替换为 Home 按钮
+    fun replaceNewTabPageWithHome() = afterAttach {
+        val clazz = XposedHelpers.findClassIfExists("org.chromium.chrome.browser.edge_bottombar.BottomBarLayout", classLoader) ?: return@afterAttach
+        val getListenerInfoMethod = XposedHelpers.findMethodExact(View::class.java, "getListenerInfo", *emptyArray<Any>())
+        val listenerInfoClass = XposedHelpers.findClass($$"android.view.View$ListenerInfo", classLoader)
+        val onClickField = XposedHelpers.findField(listenerInfoClass, "mOnClickListener")
+        val onLongClickField = XposedHelpers.findField(listenerInfoClass, "mOnLongClickListener")
+
+        XposedHelpers.findAndHookMethod(clazz, "onFinishInflate", object : XC_MethodHook() {
+            @SuppressLint("DiscouragedApi")
+            override fun afterHookedMethod(param: MethodHookParam) {
+                try {
+                    val bottomBar = param.thisObject as ViewGroup
+                    val context = bottomBar.context
+                    val plusButtonId = context.resources.getIdentifier("edge_bottom_bar_plus_button", "id", context.packageName)
+                    if (plusButtonId == 0) return
+                    val plusButton = bottomBar.findViewById<View>(plusButtonId) ?: return
+
+                    // 1. 替换图标
+                    if (plusButton is ImageView) {
+                        plusButton.setImageResource(R.drawable.home)
+                    } else {
+                        XposedHelpers.callMethod(plusButton, "setImageResource", R.drawable.home)
+                    }
+
+                    // 2. 互换事件
+                    var trueClick: View.OnClickListener? = null
+                    var trueLongClick: View.OnLongClickListener? = null
+
+                    plusButton.viewTreeObserver.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+                        override fun onDraw() {
+                            try {
+                                // 【优化】直接使用原生的 invoke 和 get，极速读取内存变量
+                                val listenerInfo = getListenerInfoMethod.invoke(plusButton) ?: return
+                                val currentClick = onClickField.get(listenerInfo) as? View.OnClickListener
+                                val currentLongClick = onLongClickField.get(listenerInfo) as? View.OnLongClickListener
+
+                                if (currentClick != null && currentClick !is EdgeXSwappedListener) {
+                                    trueClick = currentClick
+                                }
+                                if (currentLongClick != null && currentLongClick !is EdgeXSwappedListener) {
+                                    trueLongClick = currentLongClick
+                                }
+
+                                val fullyHijacked = currentClick is EdgeXSwappedListener && currentLongClick is EdgeXSwappedListener
+
+                                if (trueClick != null && trueLongClick != null && !fullyHijacked) {
+                                    class SwappedClick : View.OnClickListener, EdgeXSwappedListener {
+                                        override fun onClick(v: View) {
+                                            trueLongClick.onLongClick(v)
+                                        }
+                                    }
+
+                                    class SwappedLongClick : View.OnLongClickListener, EdgeXSwappedListener {
+                                        override fun onLongClick(v: View): Boolean {
+                                            trueClick.onClick(v)
+                                            return true
+                                        }
+                                    }
+
+                                    plusButton.setOnClickListener(SwappedClick())
+                                    plusButton.setOnLongClickListener(SwappedLongClick())
+                                }
+
+                                if (trueClick != null && trueLongClick != null) {
+                                    plusButton.isLongClickable = true
+                                }
+
+                            } catch (_: Throwable) {
+                            }
+                        }
+                    })
+
+                } catch (t: Throwable) {
+                    XposedBridge.log(t)
+                }
             }
         })
     }

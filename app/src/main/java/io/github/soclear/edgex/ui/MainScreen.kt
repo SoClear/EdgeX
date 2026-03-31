@@ -83,6 +83,11 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             summary = stringResource(id = R.string.long_click_new_tab_button_to_load_inplace_summary),
             checked = preference.longClickNewTabButtonToLoadInplace,
             onCheckedChange = {
+                if (!it) {
+                    viewModel.updateData { currentPreference ->
+                        currentPreference.copy(replaceNewTabPageWithHome = false)
+                    }
+                }
                 viewModel.updateData { currentPreference ->
                     currentPreference.copy(longClickNewTabButtonToLoadInplace = it)
                 }
@@ -138,6 +143,19 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+        SwitchItem(
+            title = stringResource(id = R.string.replace_new_tab_page_with_home_title),
+            summary = stringResource(id = R.string.replace_new_tab_page_with_home_summary),
+            checked = preference.replaceNewTabPageWithHome,
+            onCheckedChange = {
+                if (!preference.longClickNewTabButtonToLoadInplace) {
+                    return@SwitchItem
+                }
+                viewModel.updateData { currentPreference ->
+                    currentPreference.copy(replaceNewTabPageWithHome = it)
+                }
+            }
+        )
         Column {
             var expanded by rememberSaveable { mutableStateOf(false) }
 
