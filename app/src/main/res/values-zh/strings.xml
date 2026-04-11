@@ -32,4 +32,20 @@
 <string name="download_package_name_example">如: com.dv.adm.pay</string>
 <string name="download_package_name_empty_error">包名不能为空</string>
 <string name="cancel">取消</string>
+<string name="clear_data_on_exit_title">退出时清除浏览数据</string>
+<string name="clear_data_on_exit_summary">关闭 Edge 时自动清除选中的浏览数据</string>
+<string name="clear_data_on_exit_close_tabs_title">同时关闭所有标签页</string>
+<string name="clear_data_on_exit_time_range_title">时间范围</string>
+<string name="clear_data_on_exit_data_types_title">要清除的数据类型</string>
+<string name="time_range_last_hour">过去 1 小时</string>
+<string name="time_range_last_24_hours">过去 24 小时</string>
+<string name="time_range_last_7_days">过去 7 天</string>
+<string name="time_range_last_4_weeks">过去 4 周</string>
+<string name="time_range_all_time">时间不限</string>
+<string name="data_type_history">浏览记录</string>
+<string name="data_type_cookies">Cookie 和其他站点数据</string>
+<string name="data_type_cache">缓存的图像和文件</string>
+<string name="data_type_passwords">密码和通行密钥</string>
+<string name="data_type_form_data">自动填充表单数据</string>
+<string name="data_type_site_settings">站点设置</string>
 </resources>

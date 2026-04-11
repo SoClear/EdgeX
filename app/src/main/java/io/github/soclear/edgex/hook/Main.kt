@@ -61,5 +61,12 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
         if (preference.longClickNewTabButtonToLoadInplace && preference.replaceNewTabPageWithHome) {
             Edge.replaceNewTabPageWithHome()
         }
+        if (preference.clearBrowsingDataOnExit) {
+            Edge.clearBrowsingDataOnExit(
+                preference.clearBrowsingDataOnExitDataTypes.toIntArray(),
+                preference.clearBrowsingDataOnExitShouldClearTabs,
+                preference.clearBrowsingDataOnExitTimePeriod
+            )
+        }
     }
 }

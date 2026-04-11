@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -231,6 +232,115 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+        
+        Column {
+            var expanded by rememberSaveable { mutableStateOf(false) }
+
+            SwitchItem(
+                title = stringResource(id = R.string.clear_data_on_exit_title),
+                summary = stringResource(id = R.string.clear_data_on_exit_summary),
+                clickable = true,
+                onClick = { expanded = !expanded },
+                checked = preference.clearBrowsingDataOnExit,
+                onCheckedChange = {
+                    viewModel.updateData { currentPreference ->
+                        currentPreference.copy(clearBrowsingDataOnExit = it)
+                    }
+                }
+            )
+            AnimatedVisibility(expanded && preference.clearBrowsingDataOnExit) {
+                Column {
+                    SwitchItem(
+                        title = stringResource(id = R.string.clear_data_on_exit_close_tabs_title),
+                        checked = preference.clearBrowsingDataOnExitShouldClearTabs,
+                        onCheckedChange = {
+                            viewModel.updateData { currentPreference ->
+                                currentPreference.copy(clearBrowsingDataOnExitShouldClearTabs = it)
+                            }
+                        }
+                    )
+                    
+                    var showTimePeriodDialog by rememberSaveable { mutableStateOf(false) }
+                    var showDataTypesDialog by rememberSaveable { mutableStateOf(false) }
+
+                    val timePeriodStr = when (preference.clearBrowsingDataOnExitTimePeriod) {
+                        0 -> stringResource(R.string.time_range_last_hour)
+                        1 -> stringResource(R.string.time_range_last_24_hours)
+                        2 -> stringResource(R.string.time_range_last_7_days)
+                        3 -> stringResource(R.string.time_range_last_4_weeks)
+                        else -> stringResource(R.string.time_range_all_time)
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showTimePeriodDialog = true }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.clear_data_on_exit_time_range_title),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = timePeriodStr,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showDataTypesDialog = true }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.clear_data_on_exit_data_types_title),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = preference.clearBrowsingDataOnExitDataTypes.toString(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (showTimePeriodDialog) {
+                        TimePeriodConfigDialog(
+                            initialPeriod = preference.clearBrowsingDataOnExitTimePeriod,
+                            onDismiss = { showTimePeriodDialog = false },
+                            onConfirm = { newPeriod ->
+                                showTimePeriodDialog = false
+                                viewModel.updateData { currentPreference ->
+                                    currentPreference.copy(clearBrowsingDataOnExitTimePeriod = newPeriod)
+                                }
+                            }
+                        )
+                    }
+
+                    if (showDataTypesDialog) {
+                        DataTypesConfigDialog(
+                            initialTypes = preference.clearBrowsingDataOnExitDataTypes,
+                            onDismiss = { showDataTypesDialog = false },
+                            onConfirm = { newTypes ->
+                                showDataTypesDialog = false
+                                viewModel.updateData { currentPreference ->
+                                    currentPreference.copy(clearBrowsingDataOnExitDataTypes = newTypes)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -349,4 +459,111 @@ private fun DialogOptionRow(
             style = MaterialTheme.typography.bodyLarge
         )
     }
+}
+
+@Composable
+fun TimePeriodConfigDialog(
+    initialPeriod: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var tempPeriod by remember { mutableStateOf(initialPeriod) }
+    val options = listOf(
+        0 to stringResource(R.string.time_range_last_hour),
+        1 to stringResource(R.string.time_range_last_24_hours),
+        2 to stringResource(R.string.time_range_last_7_days),
+        3 to stringResource(R.string.time_range_last_4_weeks),
+        4 to stringResource(R.string.time_range_all_time)
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = stringResource(R.string.clear_data_on_exit_time_range_title))
+        },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                options.forEach { (value, title) ->
+                    DialogOptionRow(
+                        text = title,
+                        selected = tempPeriod == value,
+                        onClick = { tempPeriod = value }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(tempPeriod) }) {
+                Text(stringResource(R.string.confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun DataTypesConfigDialog(
+    initialTypes: List<Int>,
+    onDismiss: () -> Unit,
+    onConfirm: (List<Int>) -> Unit
+) {
+    var tempTypes by remember { mutableStateOf(initialTypes.toSet()) }
+    val options = listOf(
+        0 to stringResource(R.string.data_type_history),
+        1 to stringResource(R.string.data_type_cookies),
+        2 to stringResource(R.string.data_type_cache),
+        3 to stringResource(R.string.data_type_passwords),
+        4 to stringResource(R.string.data_type_form_data),
+        5 to stringResource(R.string.data_type_site_settings)
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = stringResource(R.string.clear_data_on_exit_data_types_title))
+        },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                options.forEach { (value, title) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                tempTypes = if (tempTypes.contains(value)) {
+                                    tempTypes - value
+                                } else {
+                                    tempTypes + value
+                                }
+                            }
+                            .padding(vertical = 12.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = tempTypes.contains(value),
+                            onCheckedChange = null
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(tempTypes.toList().sorted()) }) {
+                Text(stringResource(R.string.confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
 }

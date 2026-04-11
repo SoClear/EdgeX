@@ -18,6 +18,7 @@ An Xposed module for Microsoft Edge on Android, designed to enhance your browsin
 - **Long press New Tab to load in-place**: Long press the "New Tab" button to load the target URL in the current tab instead of creating a new one.
 - **Set New Tab Page URL**: Customize the URL for your new tab page.
 - **Support external downloads**: Use the system downloader, third-party apps, or copy the link.
+- **Clear browsing data on exit**: Optionally, also close all tabs, time range, and data types to clear.
 
 ### Installation
 
@@ -52,7 +53,8 @@ The Set New Tab Page URL feature allows you to use "New Tab" extensions on your 
 - **长按更多按钮回顶部**：长按“更多”按钮即可快速滚动到页面顶部。
 - **长按新标签页按钮原地加载**：长按“新标签页”按钮在当前标签页中加载，而不是新建标签页。
 - **设置新标签页 URL**：自定义新标签页的起始地址。
-- **支持外部下载**：调用系统下载器、第三方应用或者复制链接
+- **支持外部下载**：调用系统下载器、第三方应用或者复制链接。
+- **退出时清除浏览数据**：可选同时关闭所有标签页、时间范围和要清除的数据类型。
 
 ### 安装步骤
 

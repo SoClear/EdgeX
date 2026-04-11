@@ -32,4 +32,20 @@
     <string name="download_package_name_example">e.g., com.dv.adm.pay</string>
     <string name="download_package_name_empty_error">Package name cannot be empty</string>
     <string name="cancel">Cancel</string>
+    <string name="clear_data_on_exit_title">Clear browsing data on exit</string>
+    <string name="clear_data_on_exit_summary">Automatically clear selected browsing data when closing Edge</string>
+    <string name="clear_data_on_exit_close_tabs_title">Also close all tabs</string>
+    <string name="clear_data_on_exit_time_range_title">Time range</string>
+    <string name="clear_data_on_exit_data_types_title">Data types to clear</string>
+    <string name="time_range_last_hour">Last hour</string>
+    <string name="time_range_last_24_hours">Last 24 hours</string>
+    <string name="time_range_last_7_days">Last 7 days</string>
+    <string name="time_range_last_4_weeks">Last 4 weeks</string>
+    <string name="time_range_all_time">All time</string>
+    <string name="data_type_history">Browsing history</string>
+    <string name="data_type_cookies">Cookies and site data</string>
+    <string name="data_type_cache">Cached images and files</string>
+    <string name="data_type_passwords">Passwords</string>
+    <string name="data_type_form_data">Form data</string>
+    <string name="data_type_site_settings">Site settings</string>
 </resources>

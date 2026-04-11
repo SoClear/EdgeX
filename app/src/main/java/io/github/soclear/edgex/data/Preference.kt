@@ -16,7 +16,11 @@ data class Preference(
     val blockOriginalDownloadDialog: Boolean = false,
     val setDefaultDownloader: Boolean = false,
     val defaultDownloaderType: DownloaderType = DownloaderType.SYSTEM_DOWNLOADER,
-    val defaultDownloaderPackageName: String = ""
+    val defaultDownloaderPackageName: String = "",
+    val clearBrowsingDataOnExit: Boolean = false,
+    val clearBrowsingDataOnExitDataTypes: List<Int> = listOf(0),
+    val clearBrowsingDataOnExitShouldClearTabs: Boolean = false,
+    val clearBrowsingDataOnExitTimePeriod: Int = 4,
 ){
     companion object {
         const val FILE_NAME = "EdgeXPreference.json"
