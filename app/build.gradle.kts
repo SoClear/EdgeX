@@ -19,8 +19,8 @@ android {
         applicationId = "io.github.soclear.edgex"
         minSdk = 30
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.3.1"
+        versionCode = 7
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -52,8 +52,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_25
+        targetCompatibility = JavaVersion.VERSION_25
     }
     buildFeatures {
         compose = true
@@ -62,6 +62,10 @@ android {
 
     // 防止资源 ID 互相冲突，避开 0x7f
     androidResources.additionalParameters += listOf("--allow-reserved-package-id", "--package-id", "0x64")
+}
+
+kotlin {
+    jvmToolchain(25)
 }
 
 dependencies {
