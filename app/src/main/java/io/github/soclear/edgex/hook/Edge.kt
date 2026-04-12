@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.core.net.toUri
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
@@ -994,9 +995,18 @@ object Edge {
 
                 // 使用我们的安全容器包裹 Compose
                 dialog.setContentView(ComposeView(moduleContext).apply {
+                    // 1. 彻底禁用自动填充，防止 Edge 的 Autofill 服务介入
+                    importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+
+                    // 2. 彻底隐藏无障碍节点，防止 Edge 的无障碍服务遍历死循环
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                     setContent {
                         EdgeXTheme {
-                            Scaffold(modifier = androidx.compose.ui.Modifier.fillMaxWidth()) { innerPadding ->
+                            Scaffold(modifier = androidx.compose.ui.Modifier
+                                // 3. 清除该节点及其子节点的所有语义（Accessibility/Autofill 也就看不到它了）
+                                .clearAndSetSemantics{}
+                                .fillMaxWidth()
+                            ) { innerPadding ->
                                 MainScreen(viewModel = viewModel, modifier = androidx.compose.ui.Modifier.padding(innerPadding))
                             }
                         }
