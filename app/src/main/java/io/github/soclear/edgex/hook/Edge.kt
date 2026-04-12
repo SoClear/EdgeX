@@ -689,20 +689,43 @@ object Edge {
 
                             // 局部函数：寻找目标并用 ApplicationContext 强制启动
                             val tryForceLaunch = { testIntent: Intent ->
-                                val resolveInfo = pm.resolveActivity(testIntent, 0)
-                                if (resolveInfo != null) {
-                                    // 强制转为显式 Intent，获取迅雷内部具体处理下载的 Activity 类名
-                                    testIntent.component = ComponentName(
-                                        resolveInfo.activityInfo.packageName,
-                                        resolveInfo.activityInfo.name
-                                    )
+                                var isLaunched = false
 
-                                    // 使用 applicationContext 绕过 Edge 浏览器对 startActivity 的拦截
-                                    context.applicationContext.startActivity(testIntent)
-                                    true
-                                } else {
-                                    false
+                                // 使用 queryIntentActivities 获取所有能处理该 Intent 的 Activity
+                                @SuppressLint("QueryPermissionsNeeded")
+                                val resolveInfos = pm.queryIntentActivities(testIntent, 0)
+                                // 从中筛选出真正属于目标包名（例如 IDM+）的 Activity
+                                val targetInfo = resolveInfos.find { it.activityInfo.packageName == targetPackageName }
+
+                                if (targetInfo != null) {
+                                    // 找到了目标应用内的真实 Activity，强制转为显式 Intent
+                                    testIntent.component = ComponentName(
+                                        targetInfo.activityInfo.packageName,
+                                        targetInfo.activityInfo.name
+                                    )
+                                    try {
+                                        context.applicationContext.startActivity(testIntent)
+                                        isLaunched = true
+                                    } catch (e: Exception) {
+                                        XposedBridge.log("Explicit launch failed: ${e.stackTraceToString()}")
+                                    }
                                 }
+
+                                // 如果找不到具体的 Activity（可能是受到 Android 11+ 包可见性限制）
+                                // 或者上面的启动失败了，我们尝试清除 Component 并直接依赖 setPackage 启动
+                                if (!isLaunched) {
+                                    try {
+                                        // 极其重要：清除可能残留的错误 component（防止携带系统的 ResolverActivity）
+                                        testIntent.component = null
+                                        testIntent.setPackage(targetPackageName)
+                                        context.applicationContext.startActivity(testIntent)
+                                        isLaunched = true
+                                    } catch (e: Exception) {
+                                        XposedBridge.log("Implicit launch failed: ${e.stackTraceToString()}")
+                                    }
+                                }
+
+                                isLaunched
                             }
 
                             // 1. 精确匹配
