@@ -50,7 +50,6 @@ import io.github.soclear.edgex.hook.util.HookConfig
 import io.github.soclear.edgex.hook.util.afterAttach
 import io.github.soclear.edgex.hook.util.allFields
 import io.github.soclear.edgex.hook.util.getHookConfig
-import io.github.soclear.edgex.hook.util.patchComposeRecursion
 import io.github.soclear.edgex.ui.MainScreen
 import io.github.soclear.edgex.ui.theme.EdgeXTheme
 import kotlinx.serialization.Serializable
@@ -933,12 +932,6 @@ object Edge {
      * 在 Edge 设置页面的工具栏添加菜单按钮
      */
     fun addSettingsButtonToToolbar() = afterAttach {
-        // 【关键步骤】获取模块的 ClassLoader，并立即执行修复
-        val moduleClassLoader = MainViewModel::class.java.classLoader
-        if (moduleClassLoader != null) {
-            patchComposeRecursion(moduleClassLoader)
-        }
-
         val targetClass = "org.chromium.chrome.browser.edge_settings.EdgeSettingsActivity"
         val menuItemId = 10001
 

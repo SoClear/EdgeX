@@ -88,29 +88,6 @@ fun addAssetPath(modulePath: String) {
     )
 }
 
-fun patchComposeRecursion(classLoader: ClassLoader) {
-    try {
-        // 1. 找到 Compose 内部引发崩溃的那个类
-        // 注意：这个类在 androidx.compose.ui.platform 包下
-        val targetClass = findClassIfExists(
-            "androidx.compose.ui.platform.AndroidComposeView",
-            classLoader
-        )
-
-        if (targetClass != null) {
-            // 2. 彻底替换这个导致死循环的方法
-            findAndHookMethod(
-                targetClass,
-                "findViewByAccessibilityIdTraversal",
-                Int::class.javaPrimitiveType, // 参数是一个 int 类型的 ID
-                XC_MethodReplacement.returnConstant(null)
-            )
-        }
-    } catch (t: Throwable) {
-        XposedBridge.log(t)
-    }
-}
-
 fun xlog(string: String) {
     val result = "\n\n////////////////\n\n////////////////\n\n$string\n\n////////////////\n\n"
     XposedBridge.log(result)

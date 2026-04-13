@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.soclear.edgex.MainViewModel
@@ -232,7 +233,6 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
-        
         Column {
             var expanded by rememberSaveable { mutableStateOf(false) }
 
@@ -259,7 +259,7 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                             }
                         }
                     )
-                    
+
                     var showTimePeriodDialog by rememberSaveable { mutableStateOf(false) }
                     var showDataTypesDialog by rememberSaveable { mutableStateOf(false) }
 
@@ -358,6 +358,7 @@ fun DownloaderConfigDialog(
     var isPackageNameError by remember { mutableStateOf(false) }
 
     AlertDialog(
+        modifier = Modifier.clearAndSetSemantics {},
         onDismissRequest = onDismiss,
         title = {
             Text(text = stringResource(R.string.download_select_default_downloader))
