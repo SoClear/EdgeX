@@ -25,6 +25,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.webkit.URLUtil
 import android.widget.ImageView
@@ -322,35 +323,35 @@ object Edge {
      * 隐藏状态栏（沉浸）
      */
     fun hideStatusBar() {
-        XposedHelpers.findAndHookMethod(
-            Activity::class.java,
-            "onCreate",
-            Bundle::class.java,
-            object : XC_MethodHook() {
-                @Suppress("DEPRECATION")
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val activity = param.thisObject as Activity
-                    val flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                        .or(View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION)
-                        .or(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
-                        .or(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
-                        .or(View.SYSTEM_UI_FLAG_FULLSCREEN)
-                        .or(View.SYSTEM_UI_FLAG_IMMERSIVE)
-                    activity.window.decorView.systemUiVisibility = flags
+        val hookLifecycle = object : XC_MethodHook() {
+            @Suppress("DEPRECATION")
+            override fun afterHookedMethod(param: MethodHookParam) {
+                val activity = param.thisObject as Activity
+                val window = activity.window ?: return
+                val decorView = window.decorView
 
-                    val decorView = activity.window.decorView
-                    decorView.setOnSystemUiVisibilityChangeListener { visibility ->
-                        if (visibility and View.SYSTEM_UI_FLAG_FULLSCREEN == 0) {
-                            // 系统栏显示时，延迟2秒 重新隐藏
-                            decorView.postDelayed({
-                                decorView.systemUiVisibility = flags
-                            }, 2000)
-                            WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                        }
-                    }
-                }
+                // 兼容 Android 11+ 新版 API (彻底沉浸)
+                window.setDecorFitsSystemWindows(false)
+                val controller = window.insetsController
+                // 隐藏状态栏
+                controller?.hide(WindowInsets.Type.statusBars())
+                // 隐藏状态栏和导航栏
+//                controller?.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+                controller?.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+                decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    .or(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
+                    .or(View.SYSTEM_UI_FLAG_FULLSCREEN)
+                    .or(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY )
+//                隐藏导航栏
+//                    .or(View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION)
+//                    .or(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
             }
-        )
+        }
+        // Hook onCreate 和 onResume，防止 Edge 在后续流程中把状态栏拉出来
+        XposedHelpers.findAndHookMethod(Activity::class.java, "onCreate", Bundle::class.java, hookLifecycle)
+        XposedHelpers.findAndHookMethod(Activity::class.java, "onResume", hookLifecycle)
+        XposedHelpers.findAndHookMethod(Activity::class.java, "onWindowFocusChanged", Boolean::class.javaPrimitiveType, hookLifecycle)
     }
 
     fun externalDownload(
