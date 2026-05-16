@@ -10,17 +10,15 @@ plugins {
 android {
     namespace = "io.github.soclear.edgex"
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "io.github.soclear.edgex"
         minSdk = 30
         targetSdk = 37
-        versionCode = 10
-        versionName = "2.1.0"
+        versionCode = 11
+        versionName = "2.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
