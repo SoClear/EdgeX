@@ -68,5 +68,8 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
                 preference.clearBrowsingDataOnExitTimePeriod
             )
         }
+        if (preference.redirectCustomTab) {
+            Edge.redirectCustomTab(lpparam)
+        }
     }
 }

@@ -48,4 +48,6 @@
 <string name="data_type_passwords">密码和通行密钥</string>
 <string name="data_type_form_data">自动填充表单数据</string>
 <string name="data_type_site_settings">站点设置</string>
+<string name="redirect_custom_tab_title">重定向 Custom Tab</string>
+<string name="redirect_custom_tab_summary">将 Custom Tab 链接重定向为在浏览器完整模式下打开，而非受限的 Custom Tab 模式</string>
 </resources>

@@ -48,4 +48,6 @@
     <string name="data_type_passwords">Passwords</string>
     <string name="data_type_form_data">Form data</string>
     <string name="data_type_site_settings">Site settings</string>
+    <string name="redirect_custom_tab_title">Redirect Custom Tab</string>
+    <string name="redirect_custom_tab_summary">Redirect Custom Tab links to open in full browser mode instead of the restricted Custom Tab</string>
 </resources>

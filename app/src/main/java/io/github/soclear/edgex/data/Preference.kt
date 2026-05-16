@@ -21,6 +21,7 @@ data class Preference(
     val clearBrowsingDataOnExitDataTypes: List<Int> = listOf(0),
     val clearBrowsingDataOnExitShouldClearTabs: Boolean = false,
     val clearBrowsingDataOnExitTimePeriod: Int = 4,
+    val redirectCustomTab: Boolean = false,
 ){
     companion object {
         const val FILE_NAME = "EdgeXPreference.json"

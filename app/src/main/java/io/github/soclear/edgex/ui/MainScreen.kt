@@ -341,6 +341,16 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+        SwitchItem(
+            title = stringResource(id = R.string.redirect_custom_tab_title),
+            summary = stringResource(id = R.string.redirect_custom_tab_summary),
+            checked = preference.redirectCustomTab,
+            onCheckedChange = {
+                viewModel.updateData { currentPreference ->
+                    currentPreference.copy(redirectCustomTab = it)
+                }
+            }
+        )
     }
 }
 
