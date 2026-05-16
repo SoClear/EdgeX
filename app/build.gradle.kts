@@ -18,9 +18,9 @@ android {
     defaultConfig {
         applicationId = "io.github.soclear.edgex"
         minSdk = 30
-        targetSdk = 36
-        versionCode = 9
-        versionName = "2.0.2"
+        targetSdk = 37
+        versionCode = 10
+        versionName = "2.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
