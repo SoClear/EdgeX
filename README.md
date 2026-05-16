@@ -19,7 +19,7 @@ An Xposed module for Microsoft Edge on Android, designed to enhance your browsin
 - **Set New Tab Page URL**: Customize the URL for your new tab page.
 - **Support external downloads**: Use the system downloader, third-party apps, or copy the link.
 - **Clear browsing data on exit**: Optionally, also close all tabs, time range, and data types to clear.
-- **Redirect Custom Tab**: Redirect Custom Tab links to open in full browser mode
+- **Force Open in External Edge Browser**: When Edge is set as your default browser, many apps open links in a restricted, simplified Edge window inside the app. Enabling this feature forces links to break out of the current app and open in the standalone Edge browser, allowing you to use its full features.
 
 ### Installation
 
@@ -56,7 +56,7 @@ The Set New Tab Page URL feature allows you to use "New Tab" extensions on your 
 - **设置新标签页 URL**：自定义新标签页的起始地址。
 - **支持外部下载**：调用系统下载器、第三方应用或者复制链接。
 - **退出时清除浏览数据**：可选同时关闭所有标签页、时间范围和要清除的数据类型。
-- **重定向 Custom Tab**：将 Custom Tab 链接重定向为在浏览器完整模式下打开。
+- **强制跳转外部 Edge 浏览器**：当 Edge 被设置为默认浏览器后，很多应用在点击链接时，会在应用内部弹出一个受限的简易 Edge 网页窗口。开启此功能后，会强制跳出应用并交由外部 Edge 浏览器打开，让你能使用完整的 Edge 浏览器功能。
 
 ### 安装步骤
 
