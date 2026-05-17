@@ -2,6 +2,7 @@ package io.github.soclear.edgex.ui
 
 import android.app.Activity
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
@@ -38,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.robv.android.xposed.XposedBridge
 import io.github.soclear.edgex.MainViewModel
 import io.github.soclear.edgex.R
 import io.github.soclear.edgex.data.DownloaderType
@@ -358,9 +360,14 @@ fun MainScreen(viewModel: MainViewModel, activity: Activity, modifier: Modifier 
             headlineContent = {Text(stringResource(R.string.open_crx_install_activity_item_title)) },
             supportingContent =  {Text(stringResource(R.string.open_crx_install_activity_item_descriptor))},
             modifier = Modifier.clickable {
-                val intent=Intent()
-                intent.setClassName(activity.packageName,"com.microsoft.edge.extensions.developer.ExtensionInstallByCrxActivity")
-                activity.startActivity(intent)
+                try {
+                    val intent=Intent()
+                    intent.setClassName(activity.packageName,"com.microsoft.edge.extensions.developer.ExtensionInstallByCrxActivity")
+                    activity.startActivity(intent)
+                }catch (e: Exception) {
+                    Toast.makeText(activity, R.string.open_crx_install_activity_item_on_exception, Toast.LENGTH_SHORT).show()
+                    XposedBridge.log(e)
+                }
             },
         )
     }

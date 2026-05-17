@@ -52,4 +52,5 @@
     <string name="redirect_custom_tab_summary">When Edge is set as your default browser, many apps open links in a restricted, simplified Edge window inside the app. Enabling this feature forces links to break out of the current app and open in the standalone Edge browser, allowing you to use its full features</string>
     <string name="open_crx_install_activity_item_title">Open the hidden .crx file installation screen</string>
     <string name="open_crx_install_activity_item_descriptor">This feature does not work properly on some versions of Edge</string>
+    <string name="open_crx_install_activity_item_on_exception">Error on trying open installation screen!</string>
 </resources>
