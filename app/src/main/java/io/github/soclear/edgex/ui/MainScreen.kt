@@ -1,5 +1,7 @@
 package io.github.soclear.edgex.ui
 
+import android.app.Activity
+import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
@@ -18,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -40,7 +43,7 @@ import io.github.soclear.edgex.R
 import io.github.soclear.edgex.data.DownloaderType
 
 @Composable
-fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
+fun MainScreen(viewModel: MainViewModel, activity: Activity, modifier: Modifier = Modifier) {
     val preference by viewModel.preference.collectAsStateWithLifecycle()
     Column(modifier = modifier.verticalScroll(rememberScrollState())) {
         SwitchItem(
@@ -350,6 +353,15 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     currentPreference.copy(redirectCustomTab = it)
                 }
             }
+        )
+        ListItem(
+            headlineContent = {Text(stringResource(R.string.open_crx_install_activity_item_title)) },
+            supportingContent =  {Text(stringResource(R.string.open_crx_install_activity_item_descriptor))},
+            modifier = Modifier.clickable {
+                val intent=Intent()
+                intent.setClassName(activity.packageName,"com.microsoft.edge.extensions.developer.ExtensionInstallByCrxActivity")
+                activity.startActivity(intent)
+            },
         )
     }
 }
