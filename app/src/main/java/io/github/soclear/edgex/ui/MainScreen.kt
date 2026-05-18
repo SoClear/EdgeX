@@ -35,6 +35,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
@@ -45,7 +46,7 @@ import io.github.soclear.edgex.R
 import io.github.soclear.edgex.data.DownloaderType
 
 @Composable
-fun MainScreen(viewModel: MainViewModel, activity: Activity, modifier: Modifier = Modifier) {
+fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val preference by viewModel.preference.collectAsStateWithLifecycle()
     Column(modifier = modifier.verticalScroll(rememberScrollState())) {
         SwitchItem(
@@ -356,16 +357,17 @@ fun MainScreen(viewModel: MainViewModel, activity: Activity, modifier: Modifier 
                 }
             }
         )
+        val context= LocalContext.current
         ListItem(
             headlineContent = {Text(stringResource(R.string.open_crx_install_activity_item_title)) },
             supportingContent =  {Text(stringResource(R.string.open_crx_install_activity_item_descriptor))},
             modifier = Modifier.clickable {
                 try {
                     val intent=Intent()
-                    intent.setClassName(activity.packageName,"com.microsoft.edge.extensions.developer.ExtensionInstallByCrxActivity")
-                    activity.startActivity(intent)
+                    intent.setClassName(context,"com.microsoft.edge.extensions.developer.ExtensionInstallByCrxActivity")
+                    context.startActivity(intent)
                 }catch (e: Exception) {
-                    Toast.makeText(activity, R.string.open_crx_install_activity_item_on_exception, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, R.string.open_crx_install_activity_item_on_exception, Toast.LENGTH_LONG).show()
                     XposedBridge.log(e)
                 }
             },

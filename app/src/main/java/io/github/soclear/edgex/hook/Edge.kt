@@ -1002,7 +1002,7 @@ object Edge {
                                 .clearAndSetSemantics{}
                                 .fillMaxWidth()
                             ) { innerPadding ->
-                                MainScreen(viewModel = viewModel, activity = activity, modifier = androidx.compose.ui.Modifier.padding(innerPadding))
+                                MainScreen(viewModel = viewModel, modifier = androidx.compose.ui.Modifier.padding(innerPadding))
                             }
                         }
                     }
