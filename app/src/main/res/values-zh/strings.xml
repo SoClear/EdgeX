@@ -50,4 +50,7 @@
 <string name="data_type_site_settings">站点设置</string>
 <string name="redirect_custom_tab_title">强制跳转外部 Edge 浏览器</string>
 <string name="redirect_custom_tab_summary">当 Edge 被设置为默认浏览器后，很多应用在点击链接时，会在应用内部弹出一个受限的简易 Edge 网页窗口。开启此功能后，会强制跳出应用并交由外部 Edge 浏览器打开，让你能使用完整的 Edge 浏览器功能</string>
+<string name="open_crx_install_activity_item_title">打开隐藏的.crx文件安装界面</string>
+<string name="open_crx_install_activity_item_descriptor">该功能无法在某些版本的Edge上正常工作</string>
+<string name="open_crx_install_activity_item_on_exception">尝试打开crx安装界面时发生异常!</string>
 </resources>

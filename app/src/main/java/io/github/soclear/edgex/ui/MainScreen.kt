@@ -1,5 +1,8 @@
 package io.github.soclear.edgex.ui
 
+import android.app.Activity
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
@@ -18,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -31,10 +35,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.robv.android.xposed.XposedBridge
 import io.github.soclear.edgex.MainViewModel
 import io.github.soclear.edgex.R
 import io.github.soclear.edgex.data.DownloaderType
@@ -350,6 +356,21 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     currentPreference.copy(redirectCustomTab = it)
                 }
             }
+        )
+        val context= LocalContext.current
+        ListItem(
+            headlineContent = {Text(stringResource(R.string.open_crx_install_activity_item_title)) },
+            supportingContent =  {Text(stringResource(R.string.open_crx_install_activity_item_descriptor))},
+            modifier = Modifier.clickable {
+                try {
+                    val intent=Intent()
+                    intent.setClassName(context,"com.microsoft.edge.extensions.developer.ExtensionInstallByCrxActivity")
+                    context.startActivity(intent)
+                }catch (e: Exception) {
+                    Toast.makeText(context, R.string.open_crx_install_activity_item_on_exception, Toast.LENGTH_LONG).show()
+                    XposedBridge.log(e)
+                }
+            },
         )
     }
 }
