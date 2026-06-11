@@ -7,6 +7,12 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
+// 伪代码：根据 EdgeX 项目实际的 Prefs 工具类读取
+val prefs = ... // 获取模块的配置
+if (!prefs.getBoolean("merge_toolbar_navigation", false)) {
+    return // 如果用户没开这个开关，就不生效
+}
+
 fun hookEdgeToolbar(lpparam: LoadPackageParam) {
     // 1. 锁定顶部的地址栏类
     val toolbarClass = "org.chromium.chrome.browser.toolbar.top.EdgeToolbarPhone"
