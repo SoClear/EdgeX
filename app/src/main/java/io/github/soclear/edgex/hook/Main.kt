@@ -20,6 +20,9 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
             lpparam.packageName != "com.microsoft.emmx.beta" &&
             lpparam.packageName != "com.microsoft.emmx.canary" &&
             lpparam.packageName != "com.microsoft.emmx.dev"
+            // 在 MainHook.kt 的 handleLoadPackage 中调用你的新 Hook
+            ToolbarMergeHook.handleLoadPackage(lpparam)
+
         ) {
             return
         }
@@ -71,11 +74,5 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
         if (preference.redirectCustomTab) {
             Edge.redirectCustomTab(lpparam)
         }
-        <SwitchPreferenceCompat
-        app:key="merge_toolbar_navigation"
-        app:title="融合前进后退到地址栏"
-        app:summary="隐藏底部前进后退键，并在顶部地址栏左侧生成对应的导航键"
-        app:defaultValue="false" />
-
     }
 }
