@@ -375,6 +375,10 @@ object Edge {
 
         val shouldBlockDialog = AtomicBoolean(false)
         val myDialogKey = "EdgeX"
+        // 已接管的下载 GUID（onDownloadUpdated 会多次回调，用它去重，只在首次接管）
+        val handledGuids = java.util.Collections.synchronizedSet(HashSet<String>())
+        // 缓存 GURL 取 spec 方法名的键（附加在 GURL Class 上）
+        val gurlSpecMethodKey = "EdgeXGurlSpecMethod"
 
         if (blockOriginalDownloadDialog) {
             XposedHelpers.findAndHookMethod(
@@ -398,63 +402,73 @@ object Edge {
             classLoader
         ) ?: return@afterAttach
 
+        // Edge 150+ 起，下载完全由 Chromium 原生引擎处理：DownloadManagerService.onDownloadItemCreated
+        // 已成死代码，cookie/UA 也不再传到 Java 层。实测真正会触发的是
+        // DownloadController.onDownloadUpdated(DownloadInfo)（下载进度回调）。
+        val downloadController = XposedHelpers.findClassIfExists(
+            "org.chromium.chrome.browser.download.DownloadController",
+            classLoader
+        ) ?: return@afterAttach
+
+        // OtrProfileId 类型，用于精确定位 removeDownload 方法签名
+        val otrProfileIdClass = XposedHelpers.findClassIfExists(
+            "org.chromium.chrome.browser.profiles.OtrProfileId",
+            classLoader
+        )
+
         XposedHelpers.findAndHookMethod(
-            downloadManagerService,
-            "onDownloadItemCreated",
-            "org.chromium.chrome.browser.download.DownloadItem",
+            downloadController,
+            "onDownloadUpdated",
+            "org.chromium.chrome.browser.download.DownloadInfo",
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     try {
-                        val downloadItem = param.args[0] ?: return
+                        val downloadInfo = param.args[0] ?: return
 
-                        // 从 DownloadItem.c 字段提取 DownloadInfo 对象
-                        val downloadInfo = XposedHelpers.getObjectField(downloadItem, "c") ?: return
-                        // 字段 v 为 0 表示任务处于 Starting/Pending 状态
-                        val downloadState = XposedHelpers.getIntField(downloadInfo, "v")
-                        // 只保留新建的下载
-                        if (downloadState != 0) return
-                        val mimeType = XposedHelpers.getObjectField(downloadInfo, "c") as String?
+                        // GUID（DownloadInfo.l），用于去重与取消 Edge 原生下载
+                        val guid = XposedHelpers.getObjectField(downloadInfo, "l") as? String
+                            ?: return
+                        // onDownloadUpdated 会随进度多次回调，只在首次接管
+                        if (!handledGuids.add(guid)) return
+
+                        val mimeType = XposedHelpers.getObjectField(downloadInfo, "c") as? String
                         // 排除插件
-                        if (mimeType == "application/x-chrome-extension") return
-                        val activity = topActivityRef?.get() ?: return
-                        val isValidActivity = !activity.isFinishing && !activity.isDestroyed
-                        // 如果获取不到活着的 Activity，尝试使用全局 ApplicationContext
-                        val context: Context = (if (isValidActivity) activity else AndroidAppHelper.currentApplication()) ?: return
-
-                        if (blockOriginalDownloadDialog) {
-                            // 主动取消 Edge 的内部下载，防止弹出通知
-                            XposedHelpers.callMethod(
-                                param.thisObject,
-                                "broadcastDownloadAction",
-                                downloadItem,
-                                "org.chromium.chrome.browser.download.DOWNLOAD_CANCEL"
-                            )
-
-                            // 阻止 Edge 继续处理该下载，从而屏蔽其通知和列表更新
-                            param.result = null
-                            // 禁止所有弹窗
-                            shouldBlockDialog.set(true)
-                            // 2秒后启用弹窗
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                shouldBlockDialog.set(false)
-                            }, 2000)
+                        if (mimeType == "application/x-chrome-extension") {
+                            return
                         }
 
-                        // URL 是 GURL 对象，需要调用 .j() 获取字符串
-                        val gurlUrl = XposedHelpers.getObjectField(downloadInfo, "a")
-                        val url = XposedHelpers.callMethod(gurlUrl, "j") as String
+                        // URL（DownloadInfo.a 是 GURL），取字符串（方法名混淆，反射解析）
+                        val url = gurlToString(XposedHelpers.getObjectField(downloadInfo, "a"))
+                        if (url.isNullOrEmpty()) return
 
-                        val userAgent = XposedHelpers.getObjectField(downloadInfo, "b") as String?
-                        val cookie = XposedHelpers.getObjectField(downloadInfo, "d") as String?
-                        // 因为在下载任务刚创建时，文件名为空。
-//                        val fileName = XposedHelpers.getObjectField(downloadInfo, "e") as String?
-                        // 所以从 url 中提取文件名
-                        val fileName = URLUtil.guessFileName(url, null, mimeType)
+                        // referrer（DownloadInfo.h 是 GURL）
+                        val referrer = gurlToString(XposedHelpers.getObjectField(downloadInfo, "h"))
+                        // cookie / UA 在新版 Edge 原生下载路径已不再传到 Java 层，恒为 null
+                        val cookie = XposedHelpers.getObjectField(downloadInfo, "d") as? String
+                        val userAgent = XposedHelpers.getObjectField(downloadInfo, "b") as? String
+                        // 文件名：优先用 DownloadInfo.e，否则从 url 推断
+                        val fileName = (XposedHelpers.getObjectField(downloadInfo, "e") as? String)
+                            ?.takeIf { it.isNotEmpty() }
+                            ?: URLUtil.guessFileName(url, null, mimeType)
+                        // 真实文件大小（DownloadInfo.k），拿不到则为 0/-1
+                        val totalBytes = try {
+                            XposedHelpers.getLongField(downloadInfo, "k")
+                        } catch (_: Throwable) {
+                            0L
+                        }
+                        // OtrProfileId（DownloadInfo.p），取消下载时需要
+                        val otrProfileId = XposedHelpers.getObjectField(downloadInfo, "p")
 
-                        val gurlReferrer = XposedHelpers.getObjectField(downloadInfo, "h")
-                        val referrer = XposedHelpers.callMethod(gurlReferrer, "j") as String?
-                        val totalBytes = XposedHelpers.getLongField(downloadInfo, "k")
+                        val activity = topActivityRef?.get()
+                        val isValidActivity =
+                            activity != null && !activity.isFinishing && !activity.isDestroyed
+                        val context: Context =
+                            (if (isValidActivity) activity else AndroidAppHelper.currentApplication())
+                                ?: return
+
+                        // 只有在我们确实要接管时才取消 Edge 的原生下载，否则放行，避免下载丢失
                         if (setDefaultDownloader) {
+                            cancelEdgeDownload(guid, otrProfileId)
                             if (defaultDownloaderType == DownloaderType.SYSTEM_DOWNLOADER) {
                                 systemDownload(
                                     url,
@@ -476,7 +490,15 @@ object Edge {
                                     defaultDownloaderPackageName
                                 )
                             }
-                        } else {
+                        } else if (isValidActivity) {
+                            cancelEdgeDownload(guid, otrProfileId)
+                            if (blockOriginalDownloadDialog) {
+                                // 屏蔽 Edge 因这次下载弹出的原生对话框/通知
+                                shouldBlockDialog.set(true)
+                                Handler(Looper.getMainLooper()).postDelayed({
+                                    shouldBlockDialog.set(false)
+                                }, 2000)
+                            }
                             showExternalDownloadDialog(
                                 activity,
                                 fileName,
@@ -487,10 +509,82 @@ object Edge {
                                 referrer,
                                 mimeType
                             )
+                        } else {
+                            // 没有可用 Activity 弹窗，又未设默认下载器：放行 Edge 原生下载，
+                            // 并把 GUID 从已处理集合移除，等下次回调再尝试接管
+                            handledGuids.remove(guid)
                         }
                     } catch (t: Throwable) {
                         XposedBridge.log(t)
                     }
+                }
+
+                /**
+                 * 取消 Edge 已经开始的原生下载。用 DownloadManagerService.removeDownload
+                 * （按 GUID 删除，走 native）。
+                 */
+                private fun cancelEdgeDownload(
+                    guid: String,
+                    otrProfileId: Any?
+                ) {
+                    val dms = try {
+                        XposedHelpers.callStaticMethod(downloadManagerService, "a")
+                    } catch (t: Throwable) {
+                        XposedBridge.log(t)
+                        return
+                    }
+                    try {
+                        if (otrProfileIdClass != null) {
+                            XposedHelpers.callMethod(
+                                dms,
+                                "removeDownload",
+                                arrayOf(String::class.java, otrProfileIdClass, Boolean::class.javaPrimitiveType),
+                                guid,
+                                otrProfileId,
+                                false
+                            )
+                        } else {
+                            XposedHelpers.callMethod(dms, "removeDownload", guid, otrProfileId, false)
+                        }
+                    } catch (t: Throwable) {
+                        XposedBridge.log(t)
+                    }
+                }
+
+                /**
+                 * 将 GURL 对象转成字符串。GURL 取 spec 的方法在混淆下每个版本可能不同，
+                 * 这里通过“无参、返回 String、且返回值形如完整 URL”的特征反射定位并缓存。
+                 */
+                private fun gurlToString(gurl: Any?): String? {
+                    if (gurl == null) return null
+                    val clazz = gurl.javaClass
+                    val cachedName = XposedHelpers.getAdditionalStaticField(
+                        clazz,
+                        gurlSpecMethodKey
+                    ) as? String
+                    if (cachedName != null) {
+                        return XposedHelpers.callMethod(gurl, cachedName) as? String
+                    }
+                    for (method in clazz.declaredMethods) {
+                        if (method.parameterTypes.isNotEmpty()) continue
+                        if (method.returnType != String::class.java) continue
+                        try {
+                            method.isAccessible = true
+                            val value = method.invoke(gurl) as? String ?: continue
+                            if (value.contains("://") || value.startsWith("blob:") ||
+                                value.startsWith("data:")
+                            ) {
+                                XposedHelpers.setAdditionalStaticField(
+                                    clazz,
+                                    gurlSpecMethodKey,
+                                    method.name
+                                )
+                                return value
+                            }
+                        } catch (_: Throwable) {
+                        }
+                    }
+                    return null
                 }
 
                 private fun showExternalDownloadDialog(
@@ -814,7 +908,7 @@ object Edge {
 
 
                     val gurl = XposedHelpers.callMethod(currentTab, "getUrl")
-                    val currentUrl = XposedHelpers.callMethod(gurl, "j") as? String
+                    val currentUrl = gurlToString(gurl)
                     // about:blank
                     if (currentUrl == "") {
                         val activityName = activity.javaClass.name

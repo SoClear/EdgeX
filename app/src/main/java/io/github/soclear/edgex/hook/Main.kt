@@ -16,10 +16,10 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
     }
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
-        if (lpparam.packageName != "com.microsoft.emmx" &&
-            lpparam.packageName != "com.microsoft.emmx.beta" &&
-            lpparam.packageName != "com.microsoft.emmx.canary" &&
-            lpparam.packageName != "com.microsoft.emmx.dev"
+        if (lpparam.processName != "com.microsoft.emmx" &&
+            lpparam.processName != "com.microsoft.emmx.beta" &&
+            lpparam.processName != "com.microsoft.emmx.canary" &&
+            lpparam.processName != "com.microsoft.emmx.dev"
         ) {
             return
         }
