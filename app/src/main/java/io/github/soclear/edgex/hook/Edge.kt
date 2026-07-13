@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.AndroidAppHelper
-import android.app.Dialog
 import android.app.DownloadManager
 import android.app.Service
 import android.content.ActivityNotFoundException
@@ -65,7 +64,7 @@ import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.text.DecimalFormat
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.WeakHashMap
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
@@ -130,6 +129,7 @@ object Edge {
     fun setupLoadUrlOnLongClickNewTabButton(url: String) = afterAttach {
         val hookConfig = getHookConfig { getHookConfigFromDexKit() }
         if (hookConfig == null) {
+            logHomeButton("无法解析新标签页按钮配置，Home 按钮替换功能不会生效")
             return@afterAttach
         }
         try {
@@ -152,8 +152,8 @@ object Edge {
                 fieldNewTabButtonView,
                 methodLoadUrl
             )
-        } catch (_: Exception) {
-
+        } catch (t: Throwable) {
+            logHomeButton("安装新标签页按钮长按 Hook 失败", t)
         }
     }
 
@@ -237,87 +237,139 @@ object Edge {
         })
     }
 
-    // 定义一个标记接口，用于防止循环替换
-    private interface EdgeXSwappedListener
+    private class HomeButtonState : View.OnClickListener, View.OnLongClickListener {
+        var originalClick: View.OnClickListener? = null
+        var originalLongClick: View.OnLongClickListener? = null
+
+        override fun onClick(view: View) {
+            originalLongClick?.onLongClick(view)
+        }
+
+        override fun onLongClick(view: View): Boolean {
+            originalClick?.onClick(view)
+            return originalClick != null
+        }
+    }
+
+    private const val EDGE_BOTTOM_NAV_BAR_LAYOUT_CLASS =
+        "org.chromium.chrome.browser.edge_bottombar.EdgeBottomNavBarLayout"
+    private const val EDGE_BOTTOM_BAR_PLUS_BUTTON_ID = "edge_bottom_bar_plus_button"
+    private val homeButtonStates = WeakHashMap<View, HomeButtonState>()
+    private var homeButtonListenerHooksInstalled = false
+
+    private fun logHomeButton(message: String, throwable: Throwable? = null) {
+        XposedBridge.log("[EdgeX][HomeButton] $message")
+        throwable?.let(XposedBridge::log)
+    }
 
     // 将 Plus 按钮替换为 Home 按钮
     fun replaceNewTabPageWithHome() = afterAttach {
-        val clazz = XposedHelpers.findClassIfExists("org.chromium.chrome.browser.edge_bottombar.BottomBarLayout", classLoader) ?: return@afterAttach
-        val getListenerInfoMethod = XposedHelpers.findMethodExact(View::class.java, "getListenerInfo", *emptyArray<Any>())
-        val listenerInfoClass = XposedHelpers.findClass($$"android.view.View$ListenerInfo", classLoader)
-        val onClickField = XposedHelpers.findField(listenerInfoClass, "mOnClickListener")
-        val onLongClickField = XposedHelpers.findField(listenerInfoClass, "mOnLongClickListener")
+        installHomeButtonListenerHooks()
 
-        XposedHelpers.findAndHookMethod(clazz, "onFinishInflate", object : XC_MethodHook() {
-            @SuppressLint("DiscouragedApi")
+        val bottomBarClass = XposedHelpers.findClassIfExists(
+            EDGE_BOTTOM_NAV_BAR_LAYOUT_CLASS,
+            classLoader
+        ) ?: run {
+            logHomeButton("未找到底栏布局: $EDGE_BOTTOM_NAV_BAR_LAYOUT_CLASS")
+            return@afterAttach
+        }
+
+        XposedHelpers.findAndHookMethod(bottomBarClass, "onFinishInflate", object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
-                try {
-                    val bottomBar = param.thisObject as ViewGroup
-                    val context = bottomBar.context
-                    val plusButtonId = context.resources.getIdentifier("edge_bottom_bar_plus_button", "id", context.packageName)
-                    if (plusButtonId == 0) return
-                    val plusButton = bottomBar.findViewById<View>(plusButtonId) ?: return
-
-                    // 1. 替换图标
-                    if (plusButton is ImageView) {
-                        plusButton.setImageResource(R.drawable.home)
-                    } else {
-                        XposedHelpers.callMethod(plusButton, "setImageResource", R.drawable.home)
-                    }
-
-                    // 2. 互换事件
-                    var trueClick: View.OnClickListener? = null
-                    var trueLongClick: View.OnLongClickListener? = null
-
-                    plusButton.viewTreeObserver.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
-                        override fun onDraw() {
-                            try {
-                                // 【优化】直接使用原生的 invoke 和 get，极速读取内存变量
-                                val listenerInfo = getListenerInfoMethod.invoke(plusButton) ?: return
-                                val currentClick = onClickField.get(listenerInfo) as? View.OnClickListener
-                                val currentLongClick = onLongClickField.get(listenerInfo) as? View.OnLongClickListener
-
-                                if (currentClick != null && currentClick !is EdgeXSwappedListener) {
-                                    trueClick = currentClick
-                                }
-                                if (currentLongClick != null && currentLongClick !is EdgeXSwappedListener) {
-                                    trueLongClick = currentLongClick
-                                }
-
-                                val fullyHijacked = currentClick is EdgeXSwappedListener && currentLongClick is EdgeXSwappedListener
-
-                                if (trueClick != null && trueLongClick != null && !fullyHijacked) {
-                                    class SwappedClick : View.OnClickListener, EdgeXSwappedListener {
-                                        override fun onClick(v: View) {
-                                            trueLongClick.onLongClick(v)
-                                        }
-                                    }
-
-                                    class SwappedLongClick : View.OnLongClickListener, EdgeXSwappedListener {
-                                        override fun onLongClick(v: View): Boolean {
-                                            trueClick.onClick(v)
-                                            return true
-                                        }
-                                    }
-
-                                    plusButton.setOnClickListener(SwappedClick())
-                                    plusButton.setOnLongClickListener(SwappedLongClick())
-                                }
-
-                                if (trueClick != null && trueLongClick != null) {
-                                    plusButton.isLongClickable = true
-                                }
-
-                            } catch (_: Throwable) {
-                            }
-                        }
-                    })
-
-                } catch (t: Throwable) {
-                    XposedBridge.log(t)
+                val bottomBar = param.thisObject as? ViewGroup ?: return
+                val buttonId = bottomBar.resources.getIdentifier(
+                    EDGE_BOTTOM_BAR_PLUS_BUTTON_ID,
+                    "id",
+                    bottomBar.context.packageName
+                )
+                val plusButton = bottomBar.findViewById<View>(buttonId)
+                if (buttonId == 0 || plusButton == null) {
+                    logHomeButton("底栏已加载但未找到新标签页按钮")
+                    return
                 }
+                registerNewTabButton(plusButton)
             }
         })
+        logHomeButton("已 Hook 底栏布局: $EDGE_BOTTOM_NAV_BAR_LAYOUT_CLASS")
+    }
+
+    private fun installHomeButtonListenerHooks() {
+        if (homeButtonListenerHooksInstalled) {
+            return
+        }
+        homeButtonListenerHooksInstalled = true
+
+        XposedHelpers.findAndHookMethod(
+            View::class.java,
+            "setOnClickListener",
+            View.OnClickListener::class.java,
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val button = param.thisObject as? View ?: return
+                    val listener = param.args[0] as? View.OnClickListener
+                    onNewTabButtonClickListenerChanged(button, listener)
+                }
+            }
+        )
+        XposedHelpers.findAndHookMethod(
+            View::class.java,
+            "setOnLongClickListener",
+            View.OnLongClickListener::class.java,
+            object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val button = param.thisObject as? View ?: return
+                    val listener = param.args[0] as? View.OnLongClickListener
+                    onNewTabButtonLongClickListenerChanged(button, listener)
+                }
+            }
+        )
+        logHomeButton("已安装新标签页按钮监听器捕获 Hook")
+    }
+
+    private fun registerNewTabButton(button: View) {
+        if (homeButtonStates.containsKey(button)) {
+            return
+        }
+        homeButtonStates[button] = HomeButtonState()
+        try {
+            XposedHelpers.callMethod(button, "setImageResource", R.drawable.home)
+            logHomeButton("已发现新标签页按钮并替换为 Home 图标")
+        } catch (t: Throwable) {
+            logHomeButton("替换 Home 图标失败: ${button.javaClass.name}", t)
+        }
+    }
+
+    private fun onNewTabButtonClickListenerChanged(
+        button: View,
+        listener: View.OnClickListener?,
+    ) {
+        val state = homeButtonStates[button] ?: return
+        if (listener !== state) {
+            state.originalClick = listener
+            applyHomeButtonListeners(button, state)
+        }
+    }
+
+    private fun onNewTabButtonLongClickListenerChanged(
+        button: View,
+        listener: View.OnLongClickListener?,
+    ) {
+        val state = homeButtonStates[button] ?: return
+        if (listener !== state) {
+            state.originalLongClick = listener
+            applyHomeButtonListeners(button, state)
+        }
+    }
+
+    private fun applyHomeButtonListeners(button: View, state: HomeButtonState) {
+        if (state.originalClick == null || state.originalLongClick == null) {
+            return
+        }
+
+        button.setOnClickListener(state)
+        button.setOnLongClickListener(state)
+        button.isLongClickable = true
+        logHomeButton("已交换按钮事件: 点击=原长按(Home)，长按=原点击(新标签页)")
     }
 
     /**
@@ -373,24 +425,85 @@ object Edge {
             }
         )
 
-        val shouldBlockDialog = AtomicBoolean(false)
-        val myDialogKey = "EdgeX"
+        // 已接管的下载 GUID（onDownloadUpdated 会多次回调，用它去重，只在首次接管）
+        val handledGuids = java.util.Collections.synchronizedSet(HashSet<String>())
+        // 缓存 GURL 取 spec 方法名的键（附加在 GURL Class 上）
+        val gurlSpecMethodKey = "EdgeXGurlSpecMethod"
 
         if (blockOriginalDownloadDialog) {
-            XposedHelpers.findAndHookMethod(
-                Dialog::class.java,
-                "show", object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        val isMyDialog = XposedHelpers.getAdditionalInstanceField(
-                            param.thisObject,
-                            myDialogKey
-                        ) as? Boolean ?: false
-                        if (!isMyDialog && shouldBlockDialog.get()) {
-                            param.result = null
+            val downloadDialogBridge = XposedHelpers.findClassIfExists(
+                "org.chromium.chrome.browser.download.DownloadDialogBridge",
+                classLoader
+            )
+            val messageUiController = XposedHelpers.findClassIfExists(
+                "org.chromium.chrome.browser.edge_hub.downloads.EdgeDownloadMessageUiControllerImpl",
+                classLoader
+            )
+            val offlineItemClass = XposedHelpers.findClassIfExists(
+                "org.chromium.components.offline_items_collection.OfflineItem",
+                classLoader
+            )
+            val updateDeltaClass = XposedHelpers.findClassIfExists(
+                "org.chromium.components.offline_items_collection.UpdateDelta",
+                classLoader
+            )
+            val windowAndroidClass = XposedHelpers.findClassIfExists(
+                "org.chromium.ui.base.WindowAndroid",
+                classLoader
+            )
+            val profileClass = XposedHelpers.findClassIfExists(
+                "org.chromium.chrome.browser.profiles.Profile",
+                classLoader
+            )
+
+            if (messageUiController != null && offlineItemClass != null && updateDeltaClass != null) {
+                // Edge 的下载提示是 in-app notification，不是 android.app.Dialog。
+                XposedHelpers.findAndHookMethod(
+                    messageUiController,
+                    "onItemUpdated",
+                    offlineItemClass,
+                    updateDeltaClass,
+                    XC_MethodReplacement.returnConstant(null)
+                )
+            }
+
+            if (downloadDialogBridge != null && windowAndroidClass != null && profileClass != null) {
+                var completeDialogMethod: Method? = null
+                XposedHelpers.findAndHookMethod(
+                    downloadDialogBridge,
+                    "showDialog",
+                    windowAndroidClass,
+                    Long::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    String::class.java,
+                    profileClass,
+                    Boolean::class.javaPrimitiveType,
+                    object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            val suggestedPath = param.args[4] as? String ?: return
+                            val method = completeDialogMethod
+                                ?: param.thisObject.javaClass.declaredMethods.singleOrNull {
+                                    it.returnType == Void.TYPE &&
+                                        it.parameterTypes.size == 2 &&
+                                        it.parameterTypes[0] == String::class.java &&
+                                        it.parameterTypes[1] == Boolean::class.javaPrimitiveType
+                                }?.also {
+                                    it.isAccessible = true
+                                    completeDialogMethod = it
+                                }
+                                ?: return
+                            try {
+                                // 原生层必须收到完成回调；按 ABI 解析，避免依赖 R8 的方法名。
+                                method.invoke(param.thisObject, suggestedPath, false)
+                                param.result = null
+                            } catch (t: Throwable) {
+                                XposedBridge.log(t)
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
 
         val downloadManagerService = XposedHelpers.findClassIfExists(
@@ -398,63 +511,73 @@ object Edge {
             classLoader
         ) ?: return@afterAttach
 
+        // Edge 150+ 起，下载完全由 Chromium 原生引擎处理：DownloadManagerService.onDownloadItemCreated
+        // 已成死代码，cookie/UA 也不再传到 Java 层。实测真正会触发的是
+        // DownloadController.onDownloadUpdated(DownloadInfo)（下载进度回调）。
+        val downloadController = XposedHelpers.findClassIfExists(
+            "org.chromium.chrome.browser.download.DownloadController",
+            classLoader
+        ) ?: return@afterAttach
+
+        // OtrProfileId 类型，用于精确定位 removeDownload 方法签名
+        val otrProfileIdClass = XposedHelpers.findClassIfExists(
+            "org.chromium.chrome.browser.profiles.OtrProfileId",
+            classLoader
+        )
+
         XposedHelpers.findAndHookMethod(
-            downloadManagerService,
-            "onDownloadItemCreated",
-            "org.chromium.chrome.browser.download.DownloadItem",
+            downloadController,
+            "onDownloadUpdated",
+            "org.chromium.chrome.browser.download.DownloadInfo",
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     try {
-                        val downloadItem = param.args[0] ?: return
+                        val downloadInfo = param.args[0] ?: return
 
-                        // 从 DownloadItem.c 字段提取 DownloadInfo 对象
-                        val downloadInfo = XposedHelpers.getObjectField(downloadItem, "c") ?: return
-                        // 字段 v 为 0 表示任务处于 Starting/Pending 状态
-                        val downloadState = XposedHelpers.getIntField(downloadInfo, "v")
-                        // 只保留新建的下载
-                        if (downloadState != 0) return
-                        val mimeType = XposedHelpers.getObjectField(downloadInfo, "c") as String?
+                        // GUID（DownloadInfo.l），用于去重与取消 Edge 原生下载
+                        val guid = XposedHelpers.getObjectField(downloadInfo, "l") as? String
+                            ?: return
+                        // onDownloadUpdated 会随进度多次回调，只在首次接管
+                        if (!handledGuids.add(guid)) return
+
+                        val mimeType = XposedHelpers.getObjectField(downloadInfo, "c") as? String
                         // 排除插件
-                        if (mimeType == "application/x-chrome-extension") return
-                        val activity = topActivityRef?.get() ?: return
-                        val isValidActivity = !activity.isFinishing && !activity.isDestroyed
-                        // 如果获取不到活着的 Activity，尝试使用全局 ApplicationContext
-                        val context: Context = (if (isValidActivity) activity else AndroidAppHelper.currentApplication()) ?: return
-
-                        if (blockOriginalDownloadDialog) {
-                            // 主动取消 Edge 的内部下载，防止弹出通知
-                            XposedHelpers.callMethod(
-                                param.thisObject,
-                                "broadcastDownloadAction",
-                                downloadItem,
-                                "org.chromium.chrome.browser.download.DOWNLOAD_CANCEL"
-                            )
-
-                            // 阻止 Edge 继续处理该下载，从而屏蔽其通知和列表更新
-                            param.result = null
-                            // 禁止所有弹窗
-                            shouldBlockDialog.set(true)
-                            // 2秒后启用弹窗
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                shouldBlockDialog.set(false)
-                            }, 2000)
+                        if (mimeType == "application/x-chrome-extension") {
+                            return
                         }
 
-                        // URL 是 GURL 对象，需要调用 .j() 获取字符串
-                        val gurlUrl = XposedHelpers.getObjectField(downloadInfo, "a")
-                        val url = XposedHelpers.callMethod(gurlUrl, "j") as String
+                        // URL（DownloadInfo.a 是 GURL），取字符串（方法名混淆，反射解析）
+                        val url = gurlToString(XposedHelpers.getObjectField(downloadInfo, "a"))
+                        if (url.isNullOrEmpty()) return
 
-                        val userAgent = XposedHelpers.getObjectField(downloadInfo, "b") as String?
-                        val cookie = XposedHelpers.getObjectField(downloadInfo, "d") as String?
-                        // 因为在下载任务刚创建时，文件名为空。
-//                        val fileName = XposedHelpers.getObjectField(downloadInfo, "e") as String?
-                        // 所以从 url 中提取文件名
-                        val fileName = URLUtil.guessFileName(url, null, mimeType)
+                        // referrer（DownloadInfo.h 是 GURL）
+                        val referrer = gurlToString(XposedHelpers.getObjectField(downloadInfo, "h"))
+                        // cookie / UA 在新版 Edge 原生下载路径已不再传到 Java 层，恒为 null
+                        val cookie = XposedHelpers.getObjectField(downloadInfo, "d") as? String
+                        val userAgent = XposedHelpers.getObjectField(downloadInfo, "b") as? String
+                        // 文件名：优先用 DownloadInfo.e，否则从 url 推断
+                        val fileName = (XposedHelpers.getObjectField(downloadInfo, "e") as? String)
+                            ?.takeIf { it.isNotEmpty() }
+                            ?: URLUtil.guessFileName(url, null, mimeType)
+                        // 真实文件大小（DownloadInfo.k），拿不到则为 0/-1
+                        val totalBytes = try {
+                            XposedHelpers.getLongField(downloadInfo, "k")
+                        } catch (_: Throwable) {
+                            0L
+                        }
+                        // OtrProfileId（DownloadInfo.p），取消下载时需要
+                        val otrProfileId = XposedHelpers.getObjectField(downloadInfo, "p")
 
-                        val gurlReferrer = XposedHelpers.getObjectField(downloadInfo, "h")
-                        val referrer = XposedHelpers.callMethod(gurlReferrer, "j") as String?
-                        val totalBytes = XposedHelpers.getLongField(downloadInfo, "k")
+                        val activity = topActivityRef?.get()
+                        val isValidActivity =
+                            activity != null && !activity.isFinishing && !activity.isDestroyed
+                        val context: Context =
+                            (if (isValidActivity) activity else AndroidAppHelper.currentApplication())
+                                ?: return
+
+                        // 只有在我们确实要接管时才取消 Edge 的原生下载，否则放行，避免下载丢失
                         if (setDefaultDownloader) {
+                            cancelEdgeDownload(guid, otrProfileId)
                             if (defaultDownloaderType == DownloaderType.SYSTEM_DOWNLOADER) {
                                 systemDownload(
                                     url,
@@ -476,7 +599,8 @@ object Edge {
                                     defaultDownloaderPackageName
                                 )
                             }
-                        } else {
+                        } else if (isValidActivity) {
+                            cancelEdgeDownload(guid, otrProfileId)
                             showExternalDownloadDialog(
                                 activity,
                                 fileName,
@@ -487,10 +611,82 @@ object Edge {
                                 referrer,
                                 mimeType
                             )
+                        } else {
+                            // 没有可用 Activity 弹窗，又未设默认下载器：放行 Edge 原生下载，
+                            // 并把 GUID 从已处理集合移除，等下次回调再尝试接管
+                            handledGuids.remove(guid)
                         }
                     } catch (t: Throwable) {
                         XposedBridge.log(t)
                     }
+                }
+
+                /**
+                 * 取消 Edge 已经开始的原生下载。用 DownloadManagerService.removeDownload
+                 * （按 GUID 删除，走 native）。
+                 */
+                private fun cancelEdgeDownload(
+                    guid: String,
+                    otrProfileId: Any?
+                ) {
+                    val dms = try {
+                        XposedHelpers.callStaticMethod(downloadManagerService, "a")
+                    } catch (t: Throwable) {
+                        XposedBridge.log(t)
+                        return
+                    }
+                    try {
+                        if (otrProfileIdClass != null) {
+                            XposedHelpers.callMethod(
+                                dms,
+                                "removeDownload",
+                                arrayOf(String::class.java, otrProfileIdClass, Boolean::class.javaPrimitiveType),
+                                guid,
+                                otrProfileId,
+                                false
+                            )
+                        } else {
+                            XposedHelpers.callMethod(dms, "removeDownload", guid, otrProfileId, false)
+                        }
+                    } catch (t: Throwable) {
+                        XposedBridge.log(t)
+                    }
+                }
+
+                /**
+                 * 将 GURL 对象转成字符串。GURL 取 spec 的方法在混淆下每个版本可能不同，
+                 * 这里通过“无参、返回 String、且返回值形如完整 URL”的特征反射定位并缓存。
+                 */
+                private fun gurlToString(gurl: Any?): String? {
+                    if (gurl == null) return null
+                    val clazz = gurl.javaClass
+                    val cachedName = XposedHelpers.getAdditionalStaticField(
+                        clazz,
+                        gurlSpecMethodKey
+                    ) as? String
+                    if (cachedName != null) {
+                        return XposedHelpers.callMethod(gurl, cachedName) as? String
+                    }
+                    for (method in clazz.declaredMethods) {
+                        if (method.parameterTypes.isNotEmpty()) continue
+                        if (method.returnType != String::class.java) continue
+                        try {
+                            method.isAccessible = true
+                            val value = method.invoke(gurl) as? String ?: continue
+                            if (value.contains("://") || value.startsWith("blob:") ||
+                                value.startsWith("data:")
+                            ) {
+                                XposedHelpers.setAdditionalStaticField(
+                                    clazz,
+                                    gurlSpecMethodKey,
+                                    method.name
+                                )
+                                return value
+                            }
+                        } catch (_: Throwable) {
+                        }
+                    }
+                    return null
                 }
 
                 private fun showExternalDownloadDialog(
@@ -536,15 +732,6 @@ object Edge {
                                 closeBlankTab(activity)
                             }
                             .create()
-                            .also {
-                                if (blockOriginalDownloadDialog) {
-                                    XposedHelpers.setAdditionalInstanceField(
-                                        it,
-                                        myDialogKey,
-                                        true
-                                    )
-                                }
-                            }
                             .show()
                     }
                 }
@@ -814,7 +1001,7 @@ object Edge {
 
 
                     val gurl = XposedHelpers.callMethod(currentTab, "getUrl")
-                    val currentUrl = XposedHelpers.callMethod(gurl, "j") as? String
+                    val currentUrl = gurlToString(gurl)
                     // about:blank
                     if (currentUrl == "") {
                         val activityName = activity.javaClass.name
