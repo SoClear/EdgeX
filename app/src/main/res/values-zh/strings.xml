@@ -24,8 +24,8 @@
 <string name="download_clipboard_label">下载链接</string>
 <string name="download_copied_toast">下载链接已复制到剪贴板</string>
 <string name="download_external_title">支持外部下载</string>
-<string name="download_external_summary">点击下载对话框的取消按钮后就可以看到底下的外部下载对话框</string>
-<string name="download_block_original_download_dialog_title">阻止原有下载对话框</string>
+<string name="download_external_summary">隐藏 Edge 原生下载界面后，直接显示外部下载对话框</string>
+<string name="download_block_original_download_dialog_title">隐藏 Edge 原生下载界面</string>
 <string name="download_set_default_downloader">设置默认下载器</string>
 <string name="download_target_app_failed">指定应用无法处理该下载链接或未安装</string>
 <string name="download_select_default_downloader">选择默认下载器</string>

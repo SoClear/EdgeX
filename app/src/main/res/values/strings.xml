@@ -24,8 +24,8 @@
     <string name="download_clipboard_label">Download Link</string>
     <string name="download_copied_toast">Download link copied to clipboard</string>
     <string name="download_external_title">Support external download</string>
-    <string name="download_external_summary">After clicking the Cancel button in the download dialog box, you will see the external download dialog box below</string>
-    <string name="download_block_original_download_dialog_title">Block original download dialog</string>
+    <string name="download_external_summary">Hide Edge\'s native download UI and show the external download dialog directly</string>
+    <string name="download_block_original_download_dialog_title">Hide Edge native download UI</string>
     <string name="download_set_default_downloader">Set default downloader</string>
     <string name="download_target_app_failed">The specified app is not installed or cannot handle this download link.</string>
     <string name="download_select_default_downloader">Select default downloader</string>

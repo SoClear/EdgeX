@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.AndroidAppHelper
-import android.app.Dialog
 import android.app.DownloadManager
 import android.app.Service
 import android.content.ActivityNotFoundException
@@ -65,7 +64,6 @@ import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.text.DecimalFormat
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
@@ -373,28 +371,85 @@ object Edge {
             }
         )
 
-        val shouldBlockDialog = AtomicBoolean(false)
-        val myDialogKey = "EdgeX"
         // 已接管的下载 GUID（onDownloadUpdated 会多次回调，用它去重，只在首次接管）
         val handledGuids = java.util.Collections.synchronizedSet(HashSet<String>())
         // 缓存 GURL 取 spec 方法名的键（附加在 GURL Class 上）
         val gurlSpecMethodKey = "EdgeXGurlSpecMethod"
 
         if (blockOriginalDownloadDialog) {
-            XposedHelpers.findAndHookMethod(
-                Dialog::class.java,
-                "show", object : XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        val isMyDialog = XposedHelpers.getAdditionalInstanceField(
-                            param.thisObject,
-                            myDialogKey
-                        ) as? Boolean ?: false
-                        if (!isMyDialog && shouldBlockDialog.get()) {
-                            param.result = null
+            val downloadDialogBridge = XposedHelpers.findClassIfExists(
+                "org.chromium.chrome.browser.download.DownloadDialogBridge",
+                classLoader
+            )
+            val messageUiController = XposedHelpers.findClassIfExists(
+                "org.chromium.chrome.browser.edge_hub.downloads.EdgeDownloadMessageUiControllerImpl",
+                classLoader
+            )
+            val offlineItemClass = XposedHelpers.findClassIfExists(
+                "org.chromium.components.offline_items_collection.OfflineItem",
+                classLoader
+            )
+            val updateDeltaClass = XposedHelpers.findClassIfExists(
+                "org.chromium.components.offline_items_collection.UpdateDelta",
+                classLoader
+            )
+            val windowAndroidClass = XposedHelpers.findClassIfExists(
+                "org.chromium.ui.base.WindowAndroid",
+                classLoader
+            )
+            val profileClass = XposedHelpers.findClassIfExists(
+                "org.chromium.chrome.browser.profiles.Profile",
+                classLoader
+            )
+
+            if (messageUiController != null && offlineItemClass != null && updateDeltaClass != null) {
+                // Edge 的下载提示是 in-app notification，不是 android.app.Dialog。
+                XposedHelpers.findAndHookMethod(
+                    messageUiController,
+                    "onItemUpdated",
+                    offlineItemClass,
+                    updateDeltaClass,
+                    XC_MethodReplacement.returnConstant(null)
+                )
+            }
+
+            if (downloadDialogBridge != null && windowAndroidClass != null && profileClass != null) {
+                var completeDialogMethod: Method? = null
+                XposedHelpers.findAndHookMethod(
+                    downloadDialogBridge,
+                    "showDialog",
+                    windowAndroidClass,
+                    Long::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType,
+                    String::class.java,
+                    profileClass,
+                    Boolean::class.javaPrimitiveType,
+                    object : XC_MethodHook() {
+                        override fun beforeHookedMethod(param: MethodHookParam) {
+                            val suggestedPath = param.args[4] as? String ?: return
+                            val method = completeDialogMethod
+                                ?: param.thisObject.javaClass.declaredMethods.singleOrNull {
+                                    it.returnType == Void.TYPE &&
+                                        it.parameterTypes.size == 2 &&
+                                        it.parameterTypes[0] == String::class.java &&
+                                        it.parameterTypes[1] == Boolean::class.javaPrimitiveType
+                                }?.also {
+                                    it.isAccessible = true
+                                    completeDialogMethod = it
+                                }
+                                ?: return
+                            try {
+                                // 原生层必须收到完成回调；按 ABI 解析，避免依赖 R8 的方法名。
+                                method.invoke(param.thisObject, suggestedPath, false)
+                                param.result = null
+                            } catch (t: Throwable) {
+                                XposedBridge.log(t)
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
 
         val downloadManagerService = XposedHelpers.findClassIfExists(
@@ -492,13 +547,6 @@ object Edge {
                             }
                         } else if (isValidActivity) {
                             cancelEdgeDownload(guid, otrProfileId)
-                            if (blockOriginalDownloadDialog) {
-                                // 屏蔽 Edge 因这次下载弹出的原生对话框/通知
-                                shouldBlockDialog.set(true)
-                                Handler(Looper.getMainLooper()).postDelayed({
-                                    shouldBlockDialog.set(false)
-                                }, 2000)
-                            }
                             showExternalDownloadDialog(
                                 activity,
                                 fileName,
@@ -630,15 +678,6 @@ object Edge {
                                 closeBlankTab(activity)
                             }
                             .create()
-                            .also {
-                                if (blockOriginalDownloadDialog) {
-                                    XposedHelpers.setAdditionalInstanceField(
-                                        it,
-                                        myDialogKey,
-                                        true
-                                    )
-                                }
-                            }
                             .show()
                     }
                 }
