@@ -39,3 +39,7 @@ Release date: 2026-07-25
 - Requires an Xposed framework implementing libxposed API 102.
 - Statically verified against Edge `149.0.4022.105` and `150.0.4078.81`.
 - `testDebugUnitTest`, `assembleDebug`, and `assembleRelease` pass.
+- The prerelease APK uses the optimized Release build but is signed with the
+  Android debug/test key because the maintainer's production keystore is not
+  available. It can update the previously shared Debug APK, but not an APK
+  signed with a different certificate.
