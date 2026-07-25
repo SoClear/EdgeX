@@ -40,7 +40,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import de.robv.android.xposed.XposedBridge
+import android.util.Log
 import io.github.soclear.edgex.MainViewModel
 import io.github.soclear.edgex.R
 import io.github.soclear.edgex.data.DownloaderType
@@ -368,7 +368,7 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     context.startActivity(intent)
                 }catch (e: Exception) {
                     Toast.makeText(context, R.string.open_crx_install_activity_item_on_exception, Toast.LENGTH_LONG).show()
-                    XposedBridge.log(e)
+                    Log.e("EdgeX", "Failed to open Edge settings activity", e)
                 }
             },
         )

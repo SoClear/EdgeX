@@ -1,5 +1,6 @@
 <resources>
 <string name="app_name">EdgeX</string>
+<string name="xposed_description">Edge 浏览器增强模块</string>
 <string name="hide_status_bar_title">隐藏状态栏</string>
 <string name="hide_status_bar_summary">并使得网页显示在状态栏区域</string>
 <string name="remove_top_padding_title">移除顶边距</string>

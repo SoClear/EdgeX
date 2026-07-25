@@ -11,6 +11,8 @@ local.properties
 keystore.properties
 *.keystore
 *.jks
+*.apk
+*.apks
 
 # AI
 .trae

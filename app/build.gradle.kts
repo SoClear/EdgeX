@@ -17,8 +17,8 @@ android {
         applicationId = "io.github.soclear.edgex"
         minSdk = 30
         targetSdk = 37
-        versionCode = 12
-        versionName = "2.2.0"
+        versionCode = 13
+        versionName = "3.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -64,6 +64,12 @@ android {
         buildConfig = true
     }
 
+    packaging {
+        resources {
+            merges += "META-INF/xposed/*"
+        }
+    }
+
     // 防止资源 ID 互相冲突，避开 0x7f
     androidResources.additionalParameters += listOf("--allow-reserved-package-id", "--package-id", "0x64")
 }
@@ -82,7 +88,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
 
-    compileOnly(libs.xposed.api)
+    compileOnly(libs.libxposed.api)
     implementation(libs.dexkit)
     implementation(libs.datastore)
     implementation(libs.kotlinx.serialization.json)

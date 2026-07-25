@@ -8,7 +8,7 @@ lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.13.0"
 kotlin = "2.3.21"
 composeBom = "2026.05.00"
-xposed = "82"
+libxposed = "102.0.0"
 dexkit = "2.2.0"
 datastore = "1.2.1"
 kotlinxSerializationJson = "1.11.0"
@@ -28,7 +28,7 @@ androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "u
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
-xposed-api = { group = "de.robv.android.xposed", name = "api", version.ref = "xposed" }
+libxposed-api = { group = "io.github.libxposed", name = "api", version.ref = "libxposed" }
 dexkit = { group = "org.luckypray", name = "dexkit", version.ref = "dexkit" }
 datastore = { group = "androidx.datastore", name = "datastore", version.ref = "datastore" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }

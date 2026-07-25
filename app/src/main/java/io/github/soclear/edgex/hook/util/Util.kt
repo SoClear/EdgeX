@@ -1,6 +1,5 @@
 package io.github.soclear.edgex.hook.util
 
-import android.app.AndroidAppHelper
 import android.app.Application
 import android.content.Context
 import android.content.Context.CONTEXT_IGNORE_SECURITY
@@ -10,26 +9,18 @@ import android.content.SharedPreferences
 import android.content.res.loader.ResourcesLoader
 import android.content.res.loader.ResourcesProvider
 import android.os.ParcelFileDescriptor
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XC_MethodReplacement
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers.callMethod
-import de.robv.android.xposed.XposedHelpers.callStaticMethod
-import de.robv.android.xposed.XposedHelpers.findAndHookMethod
-import de.robv.android.xposed.XposedHelpers.findClass
-import de.robv.android.xposed.XposedHelpers.findClassIfExists
-import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 import java.io.File
 import java.lang.reflect.Field
 
 fun getSystemContext(): Context {
-    val activityThreadClass = findClass("android.app.ActivityThread", null)
-    val currentActivityThread = callStaticMethod(activityThreadClass, "currentActivityThread")
-    return callMethod(currentActivityThread, "getSystemContext") as Context
+    val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", null)
+    val currentActivityThread =
+        XposedHelpers.callStaticMethod(activityThreadClass, "currentActivityThread")
+    return XposedHelpers.callMethod(currentActivityThread!!, "getSystemContext") as Context
 }
 
 fun Context.createCurrentContext(): Context = createPackageContext(
-    AndroidAppHelper.currentPackageName(),
+    packageName,
     CONTEXT_IGNORE_SECURITY
 )
 
@@ -37,12 +28,13 @@ fun getCurrentSharedPreferences(name: String): SharedPreferences = getSystemCont
     .createCurrentContext()
     .getSharedPreferences(name, MODE_PRIVATE)
 
-fun LoadPackageParam.getSharedPreferences(name: String): SharedPreferences = getSystemContext()
-    .createPackageContext(packageName, CONTEXT_IGNORE_SECURITY)
-    .getSharedPreferences(name, MODE_PRIVATE)
-
-fun getPackageVersionCode(name: String = AndroidAppHelper.currentPackageName()): Long =
+fun getPackageVersionCode(name: String = currentApplication()?.packageName.orEmpty()): Long =
     getSystemContext().packageManager.getPackageInfo(name, 0).longVersionCode
+
+fun currentApplication(): Application? {
+    val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", null)
+    return XposedHelpers.callStaticMethod(activityThreadClass, "currentApplication") as? Application
+}
 
 fun afterAttach(action: Context.() -> Unit) {
     val callback = object : XC_MethodHook() {
@@ -50,7 +42,12 @@ fun afterAttach(action: Context.() -> Unit) {
             action(param.args[0] as Context)
         }
     }
-    findAndHookMethod(Application::class.java, "attach", Context::class.java, callback)
+    XposedHelpers.findAndHookMethod(
+        Application::class.java,
+        "attach",
+        Context::class.java,
+        callback
+    )
 }
 
 val Class<*>.allFields: List<Field>
@@ -65,7 +62,7 @@ val Class<*>.allFields: List<Field>
     }
 
 fun addAssetPath(modulePath: String) {
-    findAndHookMethod(
+    XposedHelpers.findAndHookMethod(
         ContextWrapper::class.java,
         "attachBaseContext",
         Context::class.java,

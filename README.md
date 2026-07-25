@@ -2,6 +2,8 @@
 
 [![Stars](https://img.shields.io/github/stars/SoClear/EdgeX)](https://github.com/SoClear/EdgeX)
 
+[Release notes / 更新日志](CHANGELOG.md)
+
 [English](#english) | [中文](#中文)
 
 ---
@@ -23,6 +25,8 @@ An Xposed module for Microsoft Edge on Android, designed to enhance your browsin
 - Open the hidden .crx file installation screen
 
 ### Installation
+
+> EdgeX 3.0 requires an Xposed framework that implements modern libxposed API 102.
 
 1. Install the **EdgeX** APK.
 2. Enable the module in **LSPosed** (or your preferred Xposed manager).
@@ -61,6 +65,8 @@ The Set New Tab Page URL feature allows you to use "New Tab" extensions on your 
 - 打开隐藏的.crx文件安装界面
 
 ### 安装步骤
+
+> EdgeX 3.0 要求 Xposed 框架支持现代 libxposed API 102。
 
 1. 安装 **EdgeX** 应用。
 2. 在 **LSPosed**（或您使用的 Xposed 管理器）中启用本模块。

@@ -3,7 +3,6 @@ package io.github.soclear.edgex.hook
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
-import android.app.AndroidAppHelper
 import android.app.Dialog
 import android.app.DownloadManager
 import android.app.Service
@@ -39,18 +38,19 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.core.net.toUri
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XC_MethodReplacement
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
-import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.soclear.edgex.MainViewModel
 import io.github.soclear.edgex.MainViewModelFactory
 import io.github.soclear.edgex.R
 import io.github.soclear.edgex.data.DownloaderType
 import io.github.soclear.edgex.hook.util.HookConfig
+import io.github.soclear.edgex.hook.util.DownloadMetadataExtractor
+import io.github.soclear.edgex.hook.util.XC_MethodHook
+import io.github.soclear.edgex.hook.util.XC_MethodReplacement
+import io.github.soclear.edgex.hook.util.XposedBridge
+import io.github.soclear.edgex.hook.util.XposedHelpers
 import io.github.soclear.edgex.hook.util.afterAttach
 import io.github.soclear.edgex.hook.util.allFields
+import io.github.soclear.edgex.hook.util.currentApplication
 import io.github.soclear.edgex.hook.util.getHookConfig
 import io.github.soclear.edgex.ui.MainScreen
 import io.github.soclear.edgex.ui.theme.EdgeXTheme
@@ -242,7 +242,16 @@ object Edge {
 
     // 将 Plus 按钮替换为 Home 按钮
     fun replaceNewTabPageWithHome() = afterAttach {
-        val clazz = XposedHelpers.findClassIfExists("org.chromium.chrome.browser.edge_bottombar.BottomBarLayout", classLoader) ?: return@afterAttach
+        // Edge 150 renamed and substantially rewrote this container. Keep the old class for
+        // Edge 149 and earlier, and prefer the new navigation-bar implementation on 150+.
+        val clazz = listOf(
+            "org.chromium.chrome.browser.edge_bottombar.EdgeBottomNavBarLayout",
+            "org.chromium.chrome.browser.edge_bottombar.BottomBarLayout",
+        ).firstNotNullOfOrNull { XposedHelpers.findClassIfExists(it, classLoader) }
+        if (clazz == null) {
+            XposedBridge.log("Home-button hook skipped: no supported bottom-bar layout")
+            return@afterAttach
+        }
         val getListenerInfoMethod = XposedHelpers.findMethodExact(View::class.java, "getListenerInfo", *emptyArray<Any>())
         val listenerInfoClass = XposedHelpers.findClass($$"android.view.View$ListenerInfo", classLoader)
         val onClickField = XposedHelpers.findField(listenerInfoClass, "mOnClickListener")
@@ -254,8 +263,15 @@ object Edge {
                 try {
                     val bottomBar = param.thisObject as ViewGroup
                     val context = bottomBar.context
-                    val plusButtonId = context.resources.getIdentifier("edge_bottom_bar_plus_button", "id", context.packageName)
-                    if (plusButtonId == 0) return
+                    val plusButtonId = context.resources.getIdentifier(
+                        "edge_bottom_bar_plus_button",
+                        "id",
+                        context.packageName
+                    )
+                    if (plusButtonId == 0) {
+                        XposedBridge.log("Home-button hook skipped: plus-button resource not found")
+                        return
+                    }
                     val plusButton = bottomBar.findViewById<View>(plusButtonId) ?: return
 
                     // 1. 替换图标
@@ -396,7 +412,11 @@ object Edge {
         val downloadManagerService = XposedHelpers.findClassIfExists(
             "org.chromium.chrome.browser.download.DownloadManagerService",
             classLoader
-        ) ?: return@afterAttach
+        )
+        if (downloadManagerService == null) {
+            XposedBridge.log("External-downloader hook skipped: DownloadManagerService not found")
+            return@afterAttach
+        }
 
         XposedHelpers.findAndHookMethod(
             downloadManagerService,
@@ -405,21 +425,25 @@ object Edge {
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
                     try {
-                        val downloadItem = param.args[0] ?: return
+                        val downloadItem = param.args[0]
 
                         // 从 DownloadItem.c 字段提取 DownloadInfo 对象
-                        val downloadInfo = XposedHelpers.getObjectField(downloadItem, "c") ?: return
+                        val metadata = DownloadMetadataExtractor.extract(downloadItem)
+                        if (metadata == null) {
+                            XposedBridge.log("External-downloader hook: unable to decode DownloadInfo")
+                            return
+                        }
                         // 字段 v 为 0 表示任务处于 Starting/Pending 状态
-                        val downloadState = XposedHelpers.getIntField(downloadInfo, "v")
-                        // 只保留新建的下载
-                        if (downloadState != 0) return
-                        val mimeType = XposedHelpers.getObjectField(downloadInfo, "c") as String?
+                        val mimeType = metadata.mimeType
                         // 排除插件
                         if (mimeType == "application/x-chrome-extension") return
-                        val activity = topActivityRef?.get() ?: return
-                        val isValidActivity = !activity.isFinishing && !activity.isDestroyed
-                        // 如果获取不到活着的 Activity，尝试使用全局 ApplicationContext
-                        val context: Context = (if (isValidActivity) activity else AndroidAppHelper.currentApplication()) ?: return
+                        val activity = topActivityRef?.get()
+                        val isValidActivity =
+                            activity != null && !activity.isFinishing && !activity.isDestroyed
+                        // Default downloaders can still be launched through the application
+                        // context when the originating Activity has already been reclaimed.
+                        val context: Context =
+                            (if (isValidActivity) activity else currentApplication()) ?: return
 
                         if (blockOriginalDownloadDialog) {
                             // 主动取消 Edge 的内部下载，防止弹出通知
@@ -441,19 +465,15 @@ object Edge {
                         }
 
                         // URL 是 GURL 对象，需要调用 .j() 获取字符串
-                        val gurlUrl = XposedHelpers.getObjectField(downloadInfo, "a")
-                        val url = XposedHelpers.callMethod(gurlUrl, "j") as String
-
-                        val userAgent = XposedHelpers.getObjectField(downloadInfo, "b") as String?
-                        val cookie = XposedHelpers.getObjectField(downloadInfo, "d") as String?
+                        val url = metadata.url
+                        val userAgent = metadata.userAgent
+                        val cookie = metadata.cookie
                         // 因为在下载任务刚创建时，文件名为空。
-//                        val fileName = XposedHelpers.getObjectField(downloadInfo, "e") as String?
                         // 所以从 url 中提取文件名
                         val fileName = URLUtil.guessFileName(url, null, mimeType)
 
-                        val gurlReferrer = XposedHelpers.getObjectField(downloadInfo, "h")
-                        val referrer = XposedHelpers.callMethod(gurlReferrer, "j") as String?
-                        val totalBytes = XposedHelpers.getLongField(downloadInfo, "k")
+                        val referrer = metadata.referrer
+                        val totalBytes = metadata.totalBytes
                         if (setDefaultDownloader) {
                             if (defaultDownloaderType == DownloaderType.SYSTEM_DOWNLOADER) {
                                 systemDownload(
@@ -476,7 +496,7 @@ object Edge {
                                     defaultDownloaderPackageName
                                 )
                             }
-                        } else {
+                        } else if (isValidActivity) {
                             showExternalDownloadDialog(
                                 activity,
                                 fileName,
@@ -486,6 +506,10 @@ object Edge {
                                 userAgent,
                                 referrer,
                                 mimeType
+                            )
+                        } else {
+                            XposedBridge.log(
+                                "External-downloader dialog skipped: no live Activity"
                             )
                         }
                     } catch (t: Throwable) {
@@ -805,7 +829,7 @@ object Edge {
 
                         activityTabProviderField.isAccessible = true
                         val activityTabProvider =
-                            activityTabProviderField.get(activity)
+                            activityTabProviderField.get(activity) ?: return
                         XposedHelpers.callMethod(activityTabProvider, "get")
                     } catch (t: Throwable) {
                         XposedBridge.log(t)
@@ -813,7 +837,7 @@ object Edge {
                     } ?: return
 
 
-                    val gurl = XposedHelpers.callMethod(currentTab, "getUrl")
+                    val gurl = XposedHelpers.callMethod(currentTab, "getUrl") ?: return
                     val currentUrl = XposedHelpers.callMethod(gurl, "j") as? String
                     // about:blank
                     if (currentUrl == "") {
@@ -953,12 +977,27 @@ object Edge {
             }
         }
 
-        // Hook Activity 基类以确保捕捉到所有子类的菜单创建过程（即使子类没有重写这些方法）
-        val classActivity = Activity::class.java
-        XposedHelpers.findAndHookMethod(classActivity, "onCreateOptionsMenu", Menu::class.java, hookMenu)
-        XposedHelpers.findAndHookMethod(classActivity, "onPrepareOptionsMenu", Menu::class.java, hookMenu)
+        val clazz = XposedHelpers.findClassIfExists(targetClass, classLoader)
+        if (clazz == null) {
+            XposedBridge.log("Settings-entry hook skipped: EdgeSettingsActivity not found")
+            return@afterAttach
+        }
+        // EdgeSettingsActivity uses AppCompat's inherited menu implementation. Hook resolution
+        // from the concrete class so API 150 does not fall back to android.app.Activity's
+        // unrelated implementation.
+        XposedHelpers.findAndHookMethod(
+            clazz,
+            "onCreateOptionsMenu",
+            Menu::class.java,
+            hookMenu
+        )
+        XposedHelpers.findAndHookMethod(
+            clazz,
+            "onPrepareOptionsMenu",
+            Menu::class.java,
+            hookMenu
+        )
 
-        val clazz = XposedHelpers.findClassIfExists(targetClass, classLoader) ?: return@afterAttach
         XposedHelpers.findAndHookMethod(clazz, "onOptionsItemSelected", MenuItem::class.java, object : XC_MethodHook() {
             override fun beforeHookedMethod(param: MethodHookParam) {
                 val menuItem = param.args[0] as MenuItem
@@ -1014,13 +1053,17 @@ object Edge {
         }
     }
 
-    fun redirectCustomTab(loadPackageParam: XC_LoadPackage.LoadPackageParam) {
+    fun redirectCustomTab(packageName: String) {
         XposedBridge.hookAllMethods(Activity::class.java, "onCreate", object : XC_MethodHook() {
             @Throws(Throwable::class)
             override fun beforeHookedMethod(param: MethodHookParam) {
                 val activity = param.thisObject as Activity
-                val className = activity.javaClass.getName()
-                if ("org.chromium.chrome.browser.customtabs.CustomTabActivity" != className) {
+                val isCustomTab = generateSequence(activity.javaClass as Class<*>?) {
+                    it.superclass
+                }.any {
+                    it.name == "org.chromium.chrome.browser.customtabs.CustomTabActivity"
+                }
+                if (!isCustomTab) {
                     return
                 }
                 val originalIntent = activity.intent ?: return
@@ -1031,14 +1074,14 @@ object Edge {
                 }
                 val cleanIntent = Intent(originalIntent).apply {
                     component = null
-                    `package` = loadPackageParam.packageName
+                    `package` = packageName
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     extras?.keySet()?.filter { key ->
                         key.startsWith("androidx.browser.customtabs.extra.") ||
                                 key.startsWith("android.support.customtabs.extra.") ||
                                 key.startsWith("org.chromium.chrome.browser.customtabs.")
                     }?.forEach(::removeExtra)
-                    putExtra("com.android.browser.application_id", loadPackageParam.packageName)
+                    putExtra("com.android.browser.application_id", packageName)
                     putExtra("create_new_tab", true)
                 }
                 activity.startActivity(cleanIntent)
@@ -1166,8 +1209,6 @@ object Edge {
             val overflowButtonOnLongClickListenerClass = bridge.findClass {
                 excludePackages(excludePackageList)
                 matcher {
-                    // public static final int SYNTHETIC = 0x00001000;
-                    modifiers = Modifier.PUBLIC or Modifier.FINAL or 0x00001000
                     superClass = "java.lang.Object"
                     addUsingString("Microsoft.Mobile.BottomBarButton.OverflowButton.ClickAction")
                     addInterface(View.OnLongClickListener::class.java.name)

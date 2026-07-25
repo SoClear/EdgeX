@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">EdgeX</string>
+    <string name="xposed_description">Edge Browser Mod</string>
     <string name="hide_status_bar_title">Hide Status Bar</string>
     <string name="hide_status_bar_summary">Allows the webpage to display in the status bar area</string>
     <string name="remove_top_padding_title">Remove top padding</string>
