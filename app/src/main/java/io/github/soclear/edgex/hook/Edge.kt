@@ -425,6 +425,33 @@ object Edge {
             }
         )
 
+        val applicationStatusClass = XposedHelpers.findClassIfExists(
+            "org.chromium.base.ApplicationStatus",
+            classLoader
+        )
+
+        fun getTopActivity(): Activity? {
+            val fromRef = topActivityRef?.get()
+            if (fromRef != null && !fromRef.isFinishing && !fromRef.isDestroyed) {
+                return fromRef
+            }
+            if (applicationStatusClass != null) {
+                val fromAppStatus = try {
+                    XposedHelpers.callStaticMethod(applicationStatusClass, "getLastTrackedFocusedActivity") as? Activity
+                } catch (_: Throwable) {
+                    try {
+                        XposedHelpers.getStaticObjectField(applicationStatusClass, "d") as? Activity
+                    } catch (_: Throwable) {
+                        null
+                    }
+                }
+                if (fromAppStatus != null && !fromAppStatus.isFinishing && !fromAppStatus.isDestroyed) {
+                    return fromAppStatus
+                }
+            }
+            return null
+        }
+
         // 已接管的下载 GUID（onDownloadUpdated 会多次回调，用它去重，只在首次接管）
         val handledGuids = java.util.Collections.synchronizedSet(HashSet<String>())
         // 缓存 GURL 取 spec 方法名的键（附加在 GURL Class 上）
@@ -435,8 +462,20 @@ object Edge {
                 "org.chromium.chrome.browser.download.DownloadDialogBridge",
                 classLoader
             )
+            val duplicateBridgeClass = XposedHelpers.findClassIfExists(
+                "org.chromium.chrome.browser.download.DuplicateDownloadDialogBridge",
+                classLoader
+            )
             val messageUiController = XposedHelpers.findClassIfExists(
                 "org.chromium.chrome.browser.edge_hub.downloads.EdgeDownloadMessageUiControllerImpl",
+                classLoader
+            )
+            val edgeDownloadManagerHelper = XposedHelpers.findClassIfExists(
+                "org.chromium.chrome.browser.edge_hub.downloads.EdgeDownloadManagerHelper",
+                classLoader
+            )
+            val edgeDownloadManagerFeatureBridge = XposedHelpers.findClassIfExists(
+                "org.chromium.chrome.browser.download.EdgeDownloadManagerFeatureBridge",
                 classLoader
             )
             val offlineItemClass = XposedHelpers.findClassIfExists(
@@ -467,6 +506,45 @@ object Edge {
                 )
             }
 
+            if (edgeDownloadManagerHelper != null) {
+                // 启用新版下载流判断，避免进入旧版 ModalDialog 弹窗分支
+                XposedHelpers.findAndHookMethod(
+                    edgeDownloadManagerHelper,
+                    "isUseNewDownloadDialogFlowEnabled",
+                    XC_MethodReplacement.returnConstant(true)
+                )
+                XposedHelpers.findAndHookMethod(
+                    edgeDownloadManagerHelper,
+                    "isInAppNotificationEnabled",
+                    XC_MethodReplacement.returnConstant(false)
+                )
+            }
+
+            if (edgeDownloadManagerFeatureBridge != null) {
+                XposedHelpers.findAndHookMethod(
+                    edgeDownloadManagerFeatureBridge,
+                    "isUseNewDownloadDialogFlowEnabled",
+                    XC_MethodReplacement.returnConstant(true)
+                )
+                // 禁用 Edge 原生下载确认弹窗
+                XposedHelpers.findAndHookMethod(
+                    edgeDownloadManagerFeatureBridge,
+                    "shouldConfirmDownload",
+                    XC_MethodReplacement.returnConstant(false)
+                )
+            }
+
+            if (duplicateBridgeClass != null) {
+                // DuplicateDownloadDialogBridge.showDialog 在 z2 为 true 时直接回调 native 并返回，不弹窗
+                XposedBridge.hookAllMethods(duplicateBridgeClass, "showDialog", object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        if (param.args.size > 6 && param.args[6] is Boolean) {
+                            param.args[6] = true
+                        }
+                    }
+                })
+            }
+
             if (downloadDialogBridge != null && windowAndroidClass != null && profileClass != null) {
                 var completeDialogMethod: Method? = null
                 XposedHelpers.findAndHookMethod(
@@ -481,28 +559,85 @@ object Edge {
                     Boolean::class.javaPrimitiveType,
                     object : XC_MethodHook() {
                         override fun beforeHookedMethod(param: MethodHookParam) {
-                            val suggestedPath = param.args[4] as? String ?: return
-                            val method = completeDialogMethod
-                                ?: param.thisObject.javaClass.declaredMethods.singleOrNull {
-                                    it.returnType == Void.TYPE &&
-                                        it.parameterTypes.size == 2 &&
-                                        it.parameterTypes[0] == String::class.java &&
-                                        it.parameterTypes[1] == Boolean::class.javaPrimitiveType
-                                }?.also {
-                                    it.isAccessible = true
-                                    completeDialogMethod = it
-                                }
-                                ?: return
                             try {
-                                // 原生层必须收到完成回调；按 ABI 解析，避免依赖 R8 的方法名。
-                                method.invoke(param.thisObject, suggestedPath, false)
-                                param.result = null
+                                try {
+                                    XposedHelpers.setObjectField(param.thisObject, "c", param.args[0])
+                                    XposedHelpers.setObjectField(param.thisObject, "f", param.args[5])
+                                } catch (_: Throwable) {}
+                                val suggestedPath = (param.args[4] as? String)?.takeIf { it.isNotEmpty() } ?: ""
+                                val method = completeDialogMethod
+                                    ?: param.thisObject.javaClass.declaredMethods.singleOrNull {
+                                        it.returnType == Void.TYPE &&
+                                            it.parameterTypes.size == 2 &&
+                                            it.parameterTypes[0] == String::class.java &&
+                                            it.parameterTypes[1] == Boolean::class.javaPrimitiveType
+                                    }?.also {
+                                        it.isAccessible = true
+                                        completeDialogMethod = it
+                                    }
+                                method?.invoke(param.thisObject, suggestedPath, false)
                             } catch (t: Throwable) {
                                 XposedBridge.log(t)
+                            } finally {
+                                param.result = null
                             }
                         }
                     }
                 )
+            }
+
+            // 使用 DexKit 动态 Hook Edge 危险文件下载确认弹窗（例如下载 APK 文件时 Edge 弹出的底部确认栏）
+            try {
+                System.loadLibrary("dexkit")
+                DexKitBridge.create(classLoader, true).use { bridge ->
+                    val dangerousBridge = bridge.findClass {
+                        matcher {
+                            className = "org.chromium.chrome.browser.download.DangerousDownloadDialogBridge"
+                        }
+                    }.singleOrNull()
+                    val showDialogMethod = dangerousBridge?.findMethod {
+                        matcher {
+                            name = "showDialog"
+                        }
+                    }?.singleOrNull()
+
+                    // 1. 拦截 DangerousDownloadDialogBridge.showDialog 调用的静态条件检查方法（返回 boolean）并强制返回 true
+                    showDialogMethod?.invokes?.findMethod {
+                        matcher {
+                            modifiers = Modifier.STATIC
+                            paramTypes()
+                            returnType = "boolean"
+                        }
+                    }?.singleOrNull()?.getMethodInstance(classLoader)?.let { ffeMethod ->
+                        XposedBridge.hookMethod(ffeMethod, XC_MethodReplacement.returnConstant(true))
+                    }
+
+                    // 2. 拦截 DangerousDownloadDialogBridge.showDialog 调用的静态底部弹窗展示方法 (String, long, Callback) -> void
+                    // 直接回调 Callback.onResult(true) 并阻止 Edge 弹窗展示
+                    showDialogMethod?.invokes?.findMethod {
+                        matcher {
+                            modifiers = Modifier.STATIC
+                            paramTypes("java.lang.String", "long", "org.chromium.base.Callback")
+                            returnType = "void"
+                        }
+                    }?.singleOrNull()?.getMethodInstance(classLoader)?.let { confirmMethod ->
+                        XposedBridge.hookMethod(confirmMethod, object : XC_MethodHook() {
+                            override fun beforeHookedMethod(param: MethodHookParam) {
+                                try {
+                                    val callback = param.args[2]
+                                    if (callback != null) {
+                                        XposedHelpers.callMethod(callback, "onResult", true)
+                                    }
+                                    param.result = null
+                                } catch (t: Throwable) {
+                                    XposedBridge.log(t)
+                                }
+                            }
+                        })
+                    }
+                }
+            } catch (t: Throwable) {
+                XposedBridge.log(t)
             }
         }
 
@@ -518,12 +653,6 @@ object Edge {
             "org.chromium.chrome.browser.download.DownloadController",
             classLoader
         ) ?: return@afterAttach
-
-        // OtrProfileId 类型，用于精确定位 removeDownload 方法签名
-        val otrProfileIdClass = XposedHelpers.findClassIfExists(
-            "org.chromium.chrome.browser.profiles.OtrProfileId",
-            classLoader
-        )
 
         XposedHelpers.findAndHookMethod(
             downloadController,
@@ -568,7 +697,7 @@ object Edge {
                         // OtrProfileId（DownloadInfo.p），取消下载时需要
                         val otrProfileId = XposedHelpers.getObjectField(downloadInfo, "p")
 
-                        val activity = topActivityRef?.get()
+                        val activity = getTopActivity()
                         val isValidActivity =
                             activity != null && !activity.isFinishing && !activity.isDestroyed
                         val context: Context =
@@ -636,18 +765,7 @@ object Edge {
                         return
                     }
                     try {
-                        if (otrProfileIdClass != null) {
-                            XposedHelpers.callMethod(
-                                dms,
-                                "removeDownload",
-                                arrayOf(String::class.java, otrProfileIdClass, Boolean::class.javaPrimitiveType),
-                                guid,
-                                otrProfileId,
-                                false
-                            )
-                        } else {
-                            XposedHelpers.callMethod(dms, "removeDownload", guid, otrProfileId, false)
-                        }
+                        XposedHelpers.callMethod(dms, "removeDownload", guid, otrProfileId, false)
                     } catch (t: Throwable) {
                         XposedBridge.log(t)
                     }
@@ -700,39 +818,44 @@ object Edge {
                     mimeType: String?
                 ) {
                     Handler(Looper.getMainLooper()).post {
-                        AlertDialog.Builder(activity)
-                            .setTitle(fileName)
-                            .setView(createUrlContainer(activity, totalBytes, url))
-                            .setPositiveButton(getString(R.string.download_system)) { _, _ ->
-                                systemDownload(
-                                    url,
-                                    cookie,
-                                    userAgent,
-                                    referrer,
-                                    mimeType,
-                                    fileName,
-                                    activity
-                                )
-                            }
-                            .setNegativeButton(getString(R.string.download_third_party)) { _, _ ->
-                                thirdPartyDownload(
-                                    url,
-                                    mimeType,
-                                    cookie,
-                                    userAgent,
-                                    referrer,
-                                    activity,
-                                    null
-                                )
-                            }
-                            .setNeutralButton(getString(R.string.download_copy_link)) { _, _ ->
-                                copyLink(activity, url)
-                            }
-                            .setOnDismissListener {
-                                closeBlankTab(activity)
-                            }
-                            .create()
-                            .show()
+                        if (activity.isFinishing || activity.isDestroyed) return@post
+                        try {
+                            AlertDialog.Builder(activity)
+                                .setTitle(fileName)
+                                .setView(createUrlContainer(activity, totalBytes, url))
+                                .setPositiveButton(getString(R.string.download_system)) { _, _ ->
+                                    systemDownload(
+                                        url,
+                                        cookie,
+                                        userAgent,
+                                        referrer,
+                                        mimeType,
+                                        fileName,
+                                        activity
+                                    )
+                                }
+                                .setNegativeButton(getString(R.string.download_third_party)) { _, _ ->
+                                    thirdPartyDownload(
+                                        url,
+                                        mimeType,
+                                        cookie,
+                                        userAgent,
+                                        referrer,
+                                        activity,
+                                        null
+                                    )
+                                }
+                                .setNeutralButton(getString(R.string.download_copy_link)) { _, _ ->
+                                    copyLink(activity, url)
+                                }
+                                .setOnDismissListener {
+                                    closeBlankTab(activity)
+                                }
+                                .create()
+                                .show()
+                        } catch (t: Throwable) {
+                            XposedBridge.log(t)
+                        }
                     }
                 }
 
