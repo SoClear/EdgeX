@@ -59,6 +59,7 @@ import org.luckypray.dexkit.query.enums.StringMatchType
 import org.luckypray.dexkit.result.MethodData
 import org.luckypray.dexkit.wrap.DexField
 import org.luckypray.dexkit.wrap.DexMethod
+import java.io.File
 import java.lang.ref.WeakReference
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -586,42 +587,27 @@ object Edge {
                 )
             }
 
-            // 使用 DexKit 动态 Hook Edge 危险文件下载确认弹窗（例如下载 APK 文件时 Edge 弹出的底部确认栏）
-            try {
-                System.loadLibrary("dexkit")
-                DexKitBridge.create(classLoader, true).use { bridge ->
-                    val dangerousBridge = bridge.findClass {
-                        matcher {
-                            className = "org.chromium.chrome.browser.download.DangerousDownloadDialogBridge"
-                        }
-                    }.singleOrNull()
-                    val showDialogMethod = dangerousBridge?.findMethod {
-                        matcher {
-                            name = "showDialog"
-                        }
-                    }?.singleOrNull()
+            var hookConfig = getHookConfig { getHookConfigFromDexKit() }
+            if (hookConfig != null && (hookConfig.methodDangerousDownloadConfirm == null || hookConfig.methodDangerousDownloadCondition == null)) {
+                // 旧缓存未包含下载相关方法，清除并重新解析生成
+                File(filesDir, "EdgeXHookConfig.json").delete()
+                hookConfig = getHookConfig { getHookConfigFromDexKit() }
+            }
 
-                    // 1. 拦截 DangerousDownloadDialogBridge.showDialog 调用的静态条件检查方法（返回 boolean）并强制返回 true
-                    showDialogMethod?.invokes?.findMethod {
-                        matcher {
-                            modifiers = Modifier.STATIC
-                            paramTypes()
-                            returnType = "boolean"
-                        }
-                    }?.singleOrNull()?.getMethodInstance(classLoader)?.let { ffeMethod ->
-                        XposedBridge.hookMethod(ffeMethod, XC_MethodReplacement.returnConstant(true))
+            if (hookConfig != null) {
+                hookConfig.methodDangerousDownloadCondition?.let { descriptor ->
+                    try {
+                        val method = DexMethod(descriptor).getMethodInstance(classLoader)
+                        XposedBridge.hookMethod(method, XC_MethodReplacement.returnConstant(true))
+                    } catch (t: Throwable) {
+                        XposedBridge.log(t)
                     }
+                }
 
-                    // 2. 拦截 DangerousDownloadDialogBridge.showDialog 调用的静态底部弹窗展示方法 (String, long, Callback) -> void
-                    // 直接回调 Callback.onResult(true) 并阻止 Edge 弹窗展示
-                    showDialogMethod?.invokes?.findMethod {
-                        matcher {
-                            modifiers = Modifier.STATIC
-                            paramTypes("java.lang.String", "long", "org.chromium.base.Callback")
-                            returnType = "void"
-                        }
-                    }?.singleOrNull()?.getMethodInstance(classLoader)?.let { confirmMethod ->
-                        XposedBridge.hookMethod(confirmMethod, object : XC_MethodHook() {
+                hookConfig.methodDangerousDownloadConfirm?.let { descriptor ->
+                    try {
+                        val method = DexMethod(descriptor).getMethodInstance(classLoader)
+                        XposedBridge.hookMethod(method, object : XC_MethodHook() {
                             override fun beforeHookedMethod(param: MethodHookParam) {
                                 try {
                                     val callback = param.args[2]
@@ -634,10 +620,10 @@ object Edge {
                                 }
                             }
                         })
+                    } catch (t: Throwable) {
+                        XposedBridge.log(t)
                     }
                 }
-            } catch (t: Throwable) {
-                XposedBridge.log(t)
             }
         }
 
@@ -1378,7 +1364,11 @@ object Edge {
         // 用于底部更多按钮长按回调中获取 Tab 对象
         val fieldActivityTabProvider: String,
         // 用于底部更多按钮长按回调中的 Tab 加载指定 url
-        val methodLoadUrl: String
+        val methodLoadUrl: String,
+        // DangerousDownloadDialogBridge.showDialog 调用的条件检查方法 (ffe.b)
+        val methodDangerousDownloadCondition: String? = null,
+        // DangerousDownloadDialogBridge.showDialog 调用的静态底部弹窗展示方法 (vee.a)
+        val methodDangerousDownloadConfirm: String? = null
     ) : HookConfig
 
     private fun Context.getHookConfigFromDexKit(): EdgeHookConfig? {
@@ -1519,6 +1509,33 @@ object Edge {
                 }
             }.singleOrNull() ?: return null
 
+            val dangerousBridge = bridge.findClass {
+                matcher {
+                    className = "org.chromium.chrome.browser.download.DangerousDownloadDialogBridge"
+                }
+            }.singleOrNull()
+            val showDialogMethod = dangerousBridge?.findMethod {
+                matcher {
+                    name = "showDialog"
+                }
+            }?.singleOrNull()
+
+            val methodDangerousDownloadCondition = showDialogMethod?.invokes?.findMethod {
+                matcher {
+                    modifiers = Modifier.STATIC
+                    paramTypes()
+                    returnType = "boolean"
+                }
+            }?.singleOrNull()?.toDexMethod()?.serialize()
+
+            val methodDangerousDownloadConfirm = showDialogMethod?.invokes?.findMethod {
+                matcher {
+                    modifiers = Modifier.STATIC
+                    paramTypes("java.lang.String", "long", "org.chromium.base.Callback")
+                    returnType = "void"
+                }
+            }?.singleOrNull()?.toDexMethod()?.serialize()
+
             return EdgeHookConfig(
                 versionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode,
                 methodLaunchNtp = methodLaunchNtp.toDexMethod().serialize(),
@@ -1531,7 +1548,9 @@ object Edge {
                 methodThatCallNewTabButtonSetOnClickListener = methodThatCallNewTabButtonSetOnClickListener.toDexMethod()
                     .serialize(),
                 fieldNameNewTabButtonActivityProvider = fieldNameNewTabButtonActivityProvider,
-                methodLoadUrl = methodLoadUrl.toDexMethod().serialize()
+                methodLoadUrl = methodLoadUrl.toDexMethod().serialize(),
+                methodDangerousDownloadCondition = methodDangerousDownloadCondition,
+                methodDangerousDownloadConfirm = methodDangerousDownloadConfirm
             )
         }
     }
