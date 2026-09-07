@@ -25,8 +25,8 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
         }
 
         addAssetPath(modulePath)
-        Edge.addSettingsButtonToToolbar()
-        Edge.crxInstallCompatibility()
+        SettingsButton.addSettingsButtonToToolbar()
+        Crx.crxInstallCompatibility()
 
         val preference: Preference = try {
             val dataStoreFile = File(lpparam.appInfo.dataDir, "files/datastore/${Preference.FILE_NAME}")
@@ -36,22 +36,22 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
         } ?: return
 
         if (preference.hideStatusBar) {
-            Edge.hideStatusBar()
+            Ui.hideStatusBar()
         }
-        Edge.removePadding(preference.removeTopPadding, preference.removeBottomPadding)
+        Ui.removePadding(preference.removeTopPadding, preference.removeBottomPadding)
         if (preference.longClickOverflowButtonToTop) {
-            Edge.setupScrollToTopOnLongClickOverflowButton()
+            LongClick.setupScrollToTopOnLongClickOverflowButton()
         }
         if (preference.longClickNewTabButtonToLoadInplace) {
-            Edge.setupLoadUrlOnLongClickNewTabButton(
+            LongClick.setupLoadUrlOnLongClickNewTabButton(
                 if (preference.setNewTabPageUrl) preference.newTabPageUrl else "edge://newtab/"
             )
         }
         if (preference.setNewTabPageUrl) {
-            Edge.setNewTabPageUrl(preference.newTabPageUrl)
+            Ui.setNewTabPageUrl(preference.newTabPageUrl)
         }
         if (preference.externalDownload) {
-            Edge.externalDownload(
+            Download.externalDownload(
                 preference.blockOriginalDownloadDialog,
                 preference.setDefaultDownloader,
                 preference.defaultDownloaderType,
@@ -60,17 +60,17 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
         }
 
         if (preference.longClickNewTabButtonToLoadInplace && preference.replaceNewTabPageWithHome) {
-            Edge.replaceNewTabPageWithHome()
+            HomeButton.replaceNewTabPageWithHome()
         }
         if (preference.clearBrowsingDataOnExit) {
-            Edge.clearBrowsingDataOnExit(
+            BrowsingData.clearBrowsingDataOnExit(
                 preference.clearBrowsingDataOnExitDataTypes.toIntArray(),
                 preference.clearBrowsingDataOnExitShouldClearTabs,
                 preference.clearBrowsingDataOnExitTimePeriod
             )
         }
         if (preference.redirectCustomTab) {
-            Edge.redirectCustomTab(lpparam)
+            CustomTab.redirectCustomTab(lpparam)
         }
     }
 }
