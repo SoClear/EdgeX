@@ -30,7 +30,11 @@ internal data class EdgeHookConfig(
     // 用于底部更多按钮长按回调中获取 Tab 对象
     val fieldActivityTabProvider: String,
     // 用于底部更多按钮长按回调中的 Tab 加载指定 url
-    val methodLoadUrl: String
+    val methodLoadUrl: String,
+    // DangerousDownloadDialogBridge.showDialog 调用的条件检查方法 (ffe.b)
+    val methodDangerousDownloadCondition: String? = null,
+    // DangerousDownloadDialogBridge.showDialog 调用的静态底部弹窗展示方法 (vee.a)
+    val methodDangerousDownloadConfirm: String? = null
 ) : HookConfig
 
 internal fun Context.getHookConfigFromDexKit(): EdgeHookConfig? {
@@ -171,6 +175,33 @@ internal fun Context.getHookConfigFromDexKit(): EdgeHookConfig? {
             }
         }.singleOrNull() ?: return null
 
+        val dangerousBridge = bridge.findClass {
+            matcher {
+                className = "org.chromium.chrome.browser.download.DangerousDownloadDialogBridge"
+            }
+        }.singleOrNull()
+        val showDialogMethod = dangerousBridge?.findMethod {
+            matcher {
+                name = "showDialog"
+            }
+        }?.singleOrNull()
+
+        val methodDangerousDownloadCondition = showDialogMethod?.invokes?.findMethod {
+            matcher {
+                modifiers = Modifier.STATIC
+                paramTypes()
+                returnType = "boolean"
+            }
+        }?.singleOrNull()?.toDexMethod()?.serialize()
+
+        val methodDangerousDownloadConfirm = showDialogMethod?.invokes?.findMethod {
+            matcher {
+                modifiers = Modifier.STATIC
+                paramTypes("java.lang.String", "long", "org.chromium.base.Callback")
+                returnType = "void"
+            }
+        }?.singleOrNull()?.toDexMethod()?.serialize()
+
         return EdgeHookConfig(
             versionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode,
             methodLaunchNtp = methodLaunchNtp.toDexMethod().serialize(),
@@ -183,7 +214,9 @@ internal fun Context.getHookConfigFromDexKit(): EdgeHookConfig? {
             methodThatCallNewTabButtonSetOnClickListener = methodThatCallNewTabButtonSetOnClickListener.toDexMethod()
                 .serialize(),
             fieldNameNewTabButtonActivityProvider = fieldNameNewTabButtonActivityProvider,
-            methodLoadUrl = methodLoadUrl.toDexMethod().serialize()
+            methodLoadUrl = methodLoadUrl.toDexMethod().serialize(),
+            methodDangerousDownloadCondition = methodDangerousDownloadCondition,
+            methodDangerousDownloadConfirm = methodDangerousDownloadConfirm
         )
     }
 }
