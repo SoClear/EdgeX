@@ -372,6 +372,15 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 }
             },
         )
+        SwitchItem(
+            title = stringResource(R.string.crx_install_compatibility_title),
+            checked = preference.crxInstallCompatibility,
+            onCheckedChange = {
+                viewModel.updateData { currentPreference ->
+                    currentPreference.copy(crxInstallCompatibility = it)
+                }
+            }
+        )
     }
 }
 

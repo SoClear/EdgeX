@@ -26,6 +26,7 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
 
         addAssetPath(modulePath)
         Edge.addSettingsButtonToToolbar()
+        Edge.crxInstallCompatibility()
 
         val preference: Preference = try {
             val dataStoreFile = File(lpparam.appInfo.dataDir, "files/datastore/${Preference.FILE_NAME}")

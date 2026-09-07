@@ -22,6 +22,7 @@ data class Preference(
     val clearBrowsingDataOnExitShouldClearTabs: Boolean = false,
     val clearBrowsingDataOnExitTimePeriod: Int = 4,
     val redirectCustomTab: Boolean = false,
+    val crxInstallCompatibility: Boolean = false,
 ){
     companion object {
         const val FILE_NAME = "EdgeXPreference.json"
