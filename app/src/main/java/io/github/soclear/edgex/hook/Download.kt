@@ -18,7 +18,6 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Browser
 import android.text.TextUtils
-import android.view.View
 import android.webkit.URLUtil
 import android.widget.LinearLayout
 import android.widget.TextView
