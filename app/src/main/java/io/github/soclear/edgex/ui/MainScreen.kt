@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -38,17 +39,69 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.robv.android.xposed.XposedBridge
 import io.github.soclear.edgex.MainViewModel
 import io.github.soclear.edgex.R
 import io.github.soclear.edgex.data.DownloaderType
+import io.github.soclear.edgex.data.Preference
 
 @Composable
 fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val preference by viewModel.preference.collectAsStateWithLifecycle()
     Column(modifier = modifier.verticalScroll(rememberScrollState())) {
+        var showDpiDialog by rememberSaveable { mutableStateOf(false) }
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.dpi_title)) },
+            supportingContent = {
+                Text(
+                    if (preference.dpi == 0) stringResource(R.string.dpi_system)
+                    else stringResource(R.string.dpi_value, preference.dpi)
+                )
+            },
+            modifier = Modifier.clickable { showDpiDialog = true }
+        )
+        if (showDpiDialog) {
+            var input by rememberSaveable(preference.dpi) {
+                mutableStateOf(preference.dpi.toString())
+            }
+            val dpi = input.trim().toIntOrNull() ?: -1
+            val valid = dpi == 0 || dpi in Preference.DPI_RANGE
+            AlertDialog(
+                modifier = Modifier.clearAndSetSemantics {},
+                onDismissRequest = { showDpiDialog = false },
+                title = { Text(stringResource(R.string.dpi_title)) },
+                text = {
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { input = it },
+                        label = { Text(stringResource(R.string.dpi_title)) },
+                        supportingText = { Text(stringResource(R.string.dpi_summary)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        isError = !valid
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = valid,
+                        onClick = {
+                            viewModel.updateData { it.copy(dpi = dpi) }
+                            showDpiDialog = false
+                        }
+                    ) {
+                        Text(stringResource(R.string.confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDpiDialog = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            )
+        }
         SwitchItem(
             title = stringResource(id = R.string.hide_status_bar_title),
             summary = stringResource(id = R.string.hide_status_bar_summary),

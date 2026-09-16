@@ -1,17 +1,77 @@
 package io.github.soclear.edgex.hook
 
 import android.app.Activity
+import android.app.Application
+import android.content.Context
+import android.content.res.Configuration
 import android.os.Bundle
+import android.util.DisplayMetrics
+import android.view.Display
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
+import io.github.soclear.edgex.data.Preference
 import io.github.soclear.edgex.hook.util.afterAttach
+import kotlin.math.roundToInt
 
 
 object Ui {
+
+    @Suppress("DEPRECATION")
+    fun setDpi(dpi: Int) {
+        if (dpi !in Preference.DPI_RANGE) return
+
+        val configurationHook = object : XC_MethodHook() {
+            override fun beforeHookedMethod(param: MethodHookParam) {
+                val index = param.args.indexOfFirst { it is Configuration }
+                if (index < 0) return
+                val config = param.args[index] as Configuration
+                if (config.densityDpi <= 0 || config.densityDpi == dpi) return
+
+                // 同步 dp 尺寸，保持布局断点和资源选择与新密度一致。
+                param.args[index] = Configuration(config).apply {
+                    val scale = densityDpi.toFloat() / dpi
+                    screenWidthDp = (screenWidthDp * scale).roundToInt()
+                    screenHeightDp = (screenHeightDp * scale).roundToInt()
+                    smallestScreenWidthDp = (smallestScreenWidthDp * scale).roundToInt()
+                    densityDpi = dpi
+                }
+            }
+        }
+        val resourcesImpl = XposedHelpers.findClass("android.content.res.ResourcesImpl", null)
+        XposedBridge.hookAllConstructors(resourcesImpl, configurationHook)
+        XposedBridge.hookAllMethods(resourcesImpl, "updateConfiguration", configurationHook)
+
+        // Chromium 在 Android 11 上直接读取 Display，需与资源密度保持一致。
+        val metricsHook = object : XC_MethodHook() {
+            override fun afterHookedMethod(param: MethodHookParam) {
+                val metrics = param.args[0] as DisplayMetrics
+                val density = dpi / DisplayMetrics.DENSITY_DEFAULT.toFloat()
+                metrics.scaledDensity *= density / metrics.density
+                metrics.density = density
+                metrics.densityDpi = dpi
+            }
+        }
+        for (method in listOf("getMetrics", "getRealMetrics")) {
+            XposedHelpers.findAndHookMethod(
+                Display::class.java, method, DisplayMetrics::class.java, metricsHook
+            )
+        }
+
+        // Application 的资源可能早于 Hook 创建，在应用初始化前更新一次。
+        XposedHelpers.findAndHookMethod(
+            Application::class.java, "attach", Context::class.java,
+            object : XC_MethodHook() {
+                override fun beforeHookedMethod(param: MethodHookParam) {
+                    val resources = (param.args[0] as Context).resources
+                    resources.updateConfiguration(resources.configuration, resources.displayMetrics)
+                }
+            }
+        )
+    }
 
     /**
      * 移除 padding

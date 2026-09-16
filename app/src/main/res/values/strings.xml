@@ -1,5 +1,9 @@
 <resources>
     <string name="app_name">EdgeX</string>
+    <string name="dpi_title">Edge DPI</string>
+    <string name="dpi_system">Follow system</string>
+    <string name="dpi_value">%1$d DPI</string>
+    <string name="dpi_summary">Enter 72–1000 DPI, or 0 to follow the system. Restart Edge to apply.</string>
     <string name="hide_status_bar_title">Hide Status Bar</string>
     <string name="hide_status_bar_summary">Allows the webpage to display in the status bar area</string>
     <string name="remove_top_padding_title">Remove top padding</string>

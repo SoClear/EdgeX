@@ -12,6 +12,7 @@ An Xposed module for Microsoft Edge on Android, designed to enhance your browsin
 
 ### Features
 
+- **Edge DPI**: Customize display density (72–1000 DPI); set to 0 to follow the system. Restart Edge to apply.
 - **Hide Status Bar**: Allows the webpage to display in the status bar area for a more immersive experience.
 - **Remove Address Bar Bottom Padding**: Optimizes the bottom spacing of the address bar.
 - **Long press Overflow to scroll to top**: Long press the "More" (overflow) button to quickly scroll to the top of the page.
@@ -50,6 +51,7 @@ The Set New Tab Page URL feature allows you to use "New Tab" extensions on your 
 
 ### 功能特性
 
+- **Edge DPI**：自定义显示密度（72–1000 DPI），设为 0 跟随系统，重启 Edge 后生效。
 - **隐藏状态栏**：允许网页显示在状态栏区域，提供更沉浸的浏览体验。
 - **移除地址栏底边距**：优化地址栏底部的间距。
 - **长按更多按钮回顶部**：长按“更多”按钮即可快速滚动到页面顶部。

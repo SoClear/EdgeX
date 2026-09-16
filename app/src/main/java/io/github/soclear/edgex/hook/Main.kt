@@ -35,6 +35,7 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
             null
         } ?: return
 
+        Ui.setDpi(preference.dpi)
         if (preference.hideStatusBar) {
             Ui.hideStatusBar()
         }

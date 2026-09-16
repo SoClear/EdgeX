@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Preference(
+    val dpi: Int = 0,
     val hideStatusBar: Boolean = false,
     val removeTopPadding: Boolean = false,
     val removeBottomPadding: Boolean = false,
@@ -26,5 +27,6 @@ data class Preference(
 ){
     companion object {
         const val FILE_NAME = "EdgeXPreference.json"
+        val DPI_RANGE = 72..1000
     }
 }
