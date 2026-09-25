@@ -1,7 +1,9 @@
 package io.github.soclear.edgex.hook
 
+
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.IXposedHookZygoteInit
+import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import io.github.soclear.edgex.data.Preference
 import io.github.soclear.edgex.hook.util.addAssetPath
@@ -30,10 +32,18 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
 
         val preference: Preference = try {
             val dataStoreFile = File(lpparam.appInfo.dataDir, "files/datastore/${Preference.FILE_NAME}")
-            Json.decodeFromString<Preference>(dataStoreFile.readText())
+            Json { ignoreUnknownKeys = true }.decodeFromString<Preference>(dataStoreFile.readText())
         } catch (_: Exception) {
             null
-        } ?: return
+        } ?: run {
+            XposedBridge.log("[EdgeX][Main] 偏好配置缺失或解析失败，模块功能未启用")
+            return
+        }
+        XposedBridge.log(
+            "[EdgeX][Main] 配置已加载: syncTabletToolbar=${preference.syncTabletToolbar}, " +
+                "adjustUiSize=${preference.adjustUiSize}, " +
+                "bookmarkBarHeightPercent=${preference.bookmarkBarHeightPercent}"
+        )
 
         if (preference.hideStatusBar) {
             Ui.hideStatusBar()
@@ -57,6 +67,13 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
                 preference.defaultDownloaderType,
                 preference.defaultDownloaderPackageName
             )
+        }
+
+        if (preference.syncTabletToolbar) {
+            TabletToolbar.syncTabletToolbarWithDesktop()
+        }
+        if (preference.adjustUiSize) {
+            TabletToolbar.scaleBookmarkBarHeight(preference.bookmarkBarHeightPercent)
         }
 
         if (preference.longClickNewTabButtonToLoadInplace && preference.replaceNewTabPageWithHome) {

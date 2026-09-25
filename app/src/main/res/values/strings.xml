@@ -10,6 +10,13 @@
     <string name="set_new_tab_page_url_title">Set New Tab Page URL</string>
     <string name="replace_new_tab_page_with_home_title">Replace New Tab button with Home button</string>
     <string name="replace_new_tab_page_with_home_summary">Tap to go Home, long-press to open a new tab. Requires "Long press New Tab to load in-place" to be enabled</string>
+    <string name="sync_tablet_toolbar_title">Sync tablet address bar with desktop</string>
+    <string name="sync_tablet_toolbar_summary">Tablet only: hides the profile avatar and the Copilot button in the address bar, and moves refresh to the left of it</string>
+    <string name="adjust_ui_size_title">Adjust bookmarks bar height</string>
+    <string name="adjust_ui_size_summary">Only applies on tablets when \"Show favorites bar\" is enabled</string>
+    <string name="adjust_ui_size_summary_enabled">Bookmarks bar height %1$d%%</string>
+    <string name="bookmark_bar_height_label">Bookmarks bar height (%1$d–%2$d)</string>
+    <string name="percent_invalid">Enter a value between %1$d and %2$d</string>
     <string name="confirm">Confirm</string>
     <string name="module_disabled_tip">Please enable this module in LSPosed</string>
     <string name="close">Close</string>

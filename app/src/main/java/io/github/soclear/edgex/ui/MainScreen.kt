@@ -45,6 +45,9 @@ import io.github.soclear.edgex.MainViewModel
 import io.github.soclear.edgex.R
 import io.github.soclear.edgex.data.DownloaderType
 
+// 收藏夹栏高度仅支持缩小
+private val BOOKMARK_BAR_HEIGHT_RANGE = 50..100
+
 @Composable
 fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val preference by viewModel.preference.collectAsStateWithLifecycle()
@@ -164,6 +167,60 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 }
             }
         )
+        SwitchItem(
+            title = stringResource(id = R.string.sync_tablet_toolbar_title),
+            summary = stringResource(id = R.string.sync_tablet_toolbar_summary),
+            checked = preference.syncTabletToolbar,
+            onCheckedChange = {
+                viewModel.updateData { currentPreference ->
+                    currentPreference.copy(syncTabletToolbar = it)
+                }
+            }
+        )
+        Column {
+            var expanded by rememberSaveable { mutableStateOf(false) }
+
+            SwitchItem(
+                title = stringResource(id = R.string.adjust_ui_size_title),
+                summary = if (preference.adjustUiSize) {
+                    stringResource(
+                        id = R.string.adjust_ui_size_summary_enabled,
+                        preference.bookmarkBarHeightPercent
+                    )
+                } else {
+                    stringResource(id = R.string.adjust_ui_size_summary)
+                },
+                clickable = true,
+                onClick = { expanded = !expanded },
+                checked = preference.adjustUiSize,
+                onCheckedChange = {
+                    if (it) {
+                        expanded = true
+                    }
+                    viewModel.updateData { currentPreference ->
+                        currentPreference.copy(adjustUiSize = it)
+                    }
+                }
+            )
+            AnimatedVisibility(expanded && preference.adjustUiSize) {
+                Column {
+                    PercentConfigRow(
+                        label = stringResource(
+                            id = R.string.bookmark_bar_height_label,
+                            BOOKMARK_BAR_HEIGHT_RANGE.first,
+                            BOOKMARK_BAR_HEIGHT_RANGE.last
+                        ),
+                        value = preference.bookmarkBarHeightPercent,
+                        range = BOOKMARK_BAR_HEIGHT_RANGE,
+                        onConfirm = { newValue ->
+                            viewModel.updateData { currentPreference ->
+                                currentPreference.copy(bookmarkBarHeightPercent = newValue)
+                            }
+                        }
+                    )
+                }
+            }
+        }
         Column {
             var expanded by rememberSaveable { mutableStateOf(false) }
 
@@ -381,6 +438,57 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun PercentConfigRow(
+    label: String,
+    value: Int,
+    range: IntRange,
+    onConfirm: (Int) -> Unit
+) {
+    var text by remember { mutableStateOf(value.toString()) }
+    var isError by remember { mutableStateOf(false) }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = {
+                text = it
+                isError = false
+            },
+            isError = isError,
+            label = { Text(label) },
+            singleLine = true,
+            supportingText = {
+                if (isError) {
+                    Text(
+                        text = stringResource(R.string.percent_invalid, range.first, range.last),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Button(
+            onClick = {
+                val parsed = text.trim().removeSuffix("%").trim().toIntOrNull()
+                if (parsed == null) {
+                    isError = true
+                } else {
+                    val clamped = parsed.coerceIn(range.first, range.last)
+                    text = clamped.toString()
+                    onConfirm(clamped)
+                }
+            }
+        ) {
+            Text(text = stringResource(id = R.string.confirm))
+        }
     }
 }
 

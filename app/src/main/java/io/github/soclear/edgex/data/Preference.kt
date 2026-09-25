@@ -23,6 +23,9 @@ data class Preference(
     val clearBrowsingDataOnExitTimePeriod: Int = 4,
     val redirectCustomTab: Boolean = false,
     val crxInstallCompatibility: Boolean = false,
+    val syncTabletToolbar: Boolean = false,
+    val adjustUiSize: Boolean = false,
+    val bookmarkBarHeightPercent: Int = 100,
 ){
     companion object {
         const val FILE_NAME = "EdgeXPreference.json"

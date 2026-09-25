@@ -10,6 +10,13 @@
 <string name="set_new_tab_page_url_title">设置新标签页 URL</string>
 <string name="replace_new_tab_page_with_home_title">将新标签页按钮替换为主页按钮</string>
 <string name="replace_new_tab_page_with_home_summary">点击回主页，长按新建标签页。需开启“长按新标签页按钮原地加载标签页”</string>
+<string name="sync_tablet_toolbar_title">平板端地址栏同步电脑端样式</string>
+<string name="sync_tablet_toolbar_summary">仅平板端适用，隐藏地址栏用户头像与 Copilot 键，刷新键移到左侧</string>
+<string name="adjust_ui_size_title">调整收藏夹栏高度</string>
+<string name="adjust_ui_size_summary">仅平板端打开“显示收藏夹栏”后适用</string>
+<string name="adjust_ui_size_summary_enabled">收藏夹栏高度 %1$d%%</string>
+<string name="bookmark_bar_height_label">收藏夹栏高度（%1$d–%2$d）</string>
+<string name="percent_invalid">请输入 %1$d 到 %2$d 之间的数值</string>
 <string name="confirm">确认</string>
 <string name="module_disabled_tip">请在 LSPosed 中启用本模块</string>
 <string name="close">关闭</string>
