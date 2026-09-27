@@ -21,7 +21,6 @@ import io.github.soclear.edgex.hook.util.afterAttach
 import io.github.soclear.edgex.ui.MainScreen
 import io.github.soclear.edgex.ui.theme.EdgeXTheme
 
-
 object SettingsButton {
 
     /**
@@ -30,16 +29,21 @@ object SettingsButton {
     fun addSettingsButtonToToolbar() = afterAttach {
         val targetClass = "org.chromium.chrome.browser.edge_settings.EdgeSettingsActivity"
         val menuItemId = 10001
+        val classActivity = Activity::class.java
 
         val hookMenu = object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
-                if (param.thisObject.javaClass.name != targetClass) return
+                val activity = param.thisObject as? Activity ?: return
+                if (activity.javaClass.name != targetClass) return
                 try {
                     val menu = param.args[0] as Menu
                     if (menu.findItem(menuItemId) == null) {
-                        // 插入按钮
                         val item = menu.add(Menu.NONE, menuItemId, Menu.NONE, "EDGEX")
                         item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+                        item.setOnMenuItemClickListener {
+                            showModuleSettingsDialog(activity)
+                            true
+                        }
                     }
                 } catch (e: Exception) {
                     XposedBridge.log(e)
@@ -47,17 +51,15 @@ object SettingsButton {
             }
         }
 
-        // Hook Activity 基类以确保捕捉到所有子类的菜单创建过程（即使子类没有重写这些方法）
-        val classActivity = Activity::class.java
         XposedHelpers.findAndHookMethod(classActivity, "onCreateOptionsMenu", Menu::class.java, hookMenu)
         XposedHelpers.findAndHookMethod(classActivity, "onPrepareOptionsMenu", Menu::class.java, hookMenu)
 
-        val clazz = XposedHelpers.findClassIfExists(targetClass, classLoader) ?: return@afterAttach
-        XposedHelpers.findAndHookMethod(clazz, "onOptionsItemSelected", MenuItem::class.java, object : XC_MethodHook() {
+        XposedHelpers.findAndHookMethod(classActivity, "onOptionsItemSelected", MenuItem::class.java, object : XC_MethodHook() {
             override fun beforeHookedMethod(param: MethodHookParam) {
+                val activity = param.thisObject as? Activity ?: return
+                if (activity.javaClass.name != targetClass) return
                 val menuItem = param.args[0] as MenuItem
                 if (menuItem.itemId == menuItemId) {
-                    val activity = param.thisObject as Activity
                     showModuleSettingsDialog(activity)
                     param.result = true
                 }
@@ -66,6 +68,7 @@ object SettingsButton {
     }
 
     private fun showModuleSettingsDialog(activity: Activity) {
+        XposedBridge.log("[EdgeX][SettingsButton] 点击了 EDGEX 菜单，准备展示设置弹窗")
         Handler(Looper.getMainLooper()).post {
             try {
                 // ComponentDialog 自身就是完美的 LifecycleOwner
@@ -102,7 +105,9 @@ object SettingsButton {
                     }
                 })
                 dialog.show()
+                XposedBridge.log("[EdgeX][SettingsButton] 设置弹窗已成功弹出")
             } catch (e: Exception) {
+                XposedBridge.log("[EdgeX][SettingsButton] 展示设置弹窗失败: ${e.message}")
                 XposedBridge.log(e)
             }
         }
