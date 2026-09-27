@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">EdgeX</string>
     <string name="hide_status_bar_title">Hide Status Bar</string>
     <string name="hide_status_bar_summary">Allows the webpage to display in the status bar area</string>
@@ -16,7 +16,7 @@
     <string name="adjust_ui_size_summary">Only applies on tablets when \"Show favorites bar\" is enabled</string>
     <string name="adjust_ui_size_summary_enabled">Bookmarks bar height %1$d%%</string>
     <string name="bookmark_bar_height_label">Bookmarks bar height (%1$d–%2$d)</string>
-    <string name="percent_invalid">Enter a value between %1$d and %2$d</string>
+    <string name="percent_invalid" tools:ignore="PluralsCandidate">Enter a value between %1$d and %2$d</string>
     <string name="confirm">Confirm</string>
     <string name="module_disabled_tip">Please enable this module in LSPosed</string>
     <string name="close">Close</string>

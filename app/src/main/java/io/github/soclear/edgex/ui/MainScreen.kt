@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -38,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.robv.android.xposed.XposedBridge
@@ -448,7 +450,7 @@ private fun PercentConfigRow(
     range: IntRange,
     onConfirm: (Int) -> Unit
 ) {
-    var text by remember { mutableStateOf(value.toString()) }
+    var text by remember(value) { mutableStateOf(value.toString()) }
     var isError by remember { mutableStateOf(false) }
 
     Row(
@@ -464,6 +466,7 @@ private fun PercentConfigRow(
             isError = isError,
             label = { Text(label) },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             supportingText = {
                 if (isError) {
                     Text(
@@ -478,12 +481,11 @@ private fun PercentConfigRow(
         Button(
             onClick = {
                 val parsed = text.trim().removeSuffix("%").trim().toIntOrNull()
-                if (parsed == null) {
+                if (parsed == null || parsed !in range) {
                     isError = true
                 } else {
-                    val clamped = parsed.coerceIn(range.first, range.last)
-                    text = clamped.toString()
-                    onConfirm(clamped)
+                    isError = false
+                    onConfirm(parsed)
                 }
             }
         ) {

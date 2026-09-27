@@ -1,19 +1,17 @@
 package io.github.soclear.edgex.hook
 
+import android.annotation.SuppressLint
+import android.content.Context
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewStub
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import io.github.soclear.edgex.hook.util.afterAttach
-import java.util.Collections
-import java.util.WeakHashMap
 import kotlin.math.roundToInt
 
 object TabletToolbar {
-
 
     // 平板工具栏的运行时类；它本身没有重写 onFinishInflate，
     // 该方法由父类 ToolbarTablet 声明，因此 hook 目标是父类并按实例类型过滤
@@ -26,10 +24,12 @@ object TabletToolbar {
     private const val BOOKMARK_BAR_BUTTON_CLASS =
         "org.chromium.chrome.browser.bookmarks.bar.BookmarkBarButton"
 
-    // 需要保持隐藏的按钮（Copilot 聊天键、用户头像）
-    private val forceHiddenViews: MutableSet<View> =
-        Collections.newSetFromMap(WeakHashMap())
-    private var forceHiddenGuardInstalled = false
+    // 需要保持隐藏的视图标识
+    private val EXTRA_VIEW_NAMES = setOf(
+        "edge_account_avatar",
+        "edge_toolbar_copilot",
+        "edge_toolbar_copilot_stub"
+    )
 
     private fun log(message: String, throwable: Throwable? = null) {
         Log.w("EdgeX", "[TabletToolbar] $message", throwable)
@@ -37,12 +37,26 @@ object TabletToolbar {
         throwable?.let(XposedBridge::log)
     }
 
+    @SuppressLint("DiscouragedApi")
     private fun View.findViewByName(name: String): View? {
         val id = resources.getIdentifier(name, "id", context.packageName)
         return if (id != 0) findViewById(id) else null
     }
 
     private fun scalePx(value: Int, percent: Int): Int = (value * percent / 100f).roundToInt()
+
+    /**
+     * Edge 采用了 App Bundle (Isolated Split APKs)，核心 Chromium 代码存放在 split_chrome.apk 中。
+     * 在 Application.attach 时 ClassLoader 默认仅包含 base.apk，需通过 split context 获取。
+     */
+    private fun Context.getChromeClassLoader(): ClassLoader {
+        return try {
+            createContextForSplit("chrome").classLoader
+        } catch (t: Throwable) {
+            log("获取 split_chrome classLoader 失败，回退到 base classLoader", t)
+            classLoader
+        }
+    }
 
     /**
      * hook 平板工具栏的 inflate 时机
@@ -72,18 +86,31 @@ object TabletToolbar {
 
     /**
      * 功能一：让平板端地址栏与电脑端样式大致同步
-     * - 隐藏最左侧的用户头像（应需求直接删除该按钮）
+     * - 隐藏最左侧的用户头像
      * - 地址栏右侧的刷新移动到左侧“主页”之前
      * - 隐藏最右侧的 Copilot 聊天键
      * - 地址栏为 weight 布局，按钮腾出空间后自动加长
      */
     fun syncTabletToolbarWithDesktop() = afterAttach {
-        val installed = hookToolbarTabletInflate(classLoader) { toolbar ->
+        val installed = hookToolbarTabletInflate(getChromeClassLoader()) { toolbar ->
             hideToolbarExtras(toolbar)
-            installForceHiddenGuard(toolbar)
         }
         if (installed) {
             log("已注册平板工具栏同步 hook")
+        }
+    }
+
+    private fun hideViewPermanently(view: View) {
+        view.visibility = View.GONE
+        view.layoutParams?.let { params ->
+            if (params.width != 0 || params.height != 0) {
+                params.width = 0
+                params.height = 0
+                if (params is ViewGroup.MarginLayoutParams) {
+                    params.setMargins(0, 0, 0, 0)
+                }
+                view.layoutParams = params
+            }
         }
     }
 
@@ -93,11 +120,10 @@ object TabletToolbar {
             return
         }
 
-        // 1) 删除用户头像：隐藏并加入强制隐藏集合，防止 Edge 后续重新显示
+        // 1) 隐藏用户头像：设为 GONE 并清零宽高，防止占位
         val avatar = layout.findViewByName("edge_account_avatar")
         if (avatar != null) {
-            avatar.visibility = View.GONE
-            forceHiddenViews.add(avatar)
+            hideViewPermanently(avatar)
             log("已隐藏用户头像")
         } else {
             log("未找到平板工具栏头像 edge_account_avatar")
@@ -117,47 +143,32 @@ object TabletToolbar {
             log("未找到平板工具栏刷新按钮 refresh_button")
         }
 
-        // 3) 隐藏 Copilot 聊天键（布局里是 ViewStub，可能尚未 inflate）
-        layout.findViewByName("edge_toolbar_copilot")?.let {
-            it.visibility = View.GONE
-            forceHiddenViews.add(it)
-        }
-        layout.findViewByName("edge_toolbar_copilot_stub")?.visibility = View.GONE
+        // 3) 隐藏 Copilot 聊天键（布局里是 ViewStub 或已膨胀的 View）
+        layout.findViewByName("edge_toolbar_copilot")?.let { hideViewPermanently(it) }
+        layout.findViewByName("edge_toolbar_copilot_stub")?.let { hideViewPermanently(it) }
+
+        // 4) 监听局部布局与层次变化，彻底杜绝全局 Hook View.setVisibility 的性能损耗
+        installLayoutGuard(layout)
     }
 
     /**
-     * 头像与 Copilot 键可能被 Edge 延迟创建或重新显示，需要持续拦截
+     * 仅在当前 Toolbar 布局内监听布局重排，
+     * 防止 Edge 异步将头像/Copilot 重新设为 VISIBLE 或 ViewStub 延迟膨胀。
      */
-    private fun installForceHiddenGuard(toolbar: ViewGroup) {
-        if (forceHiddenGuardInstalled) return
-        forceHiddenGuardInstalled = true
-
-        XposedHelpers.findAndHookMethod(ViewStub::class.java, "inflate", object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                val view = param.result as? View ?: return
+    private fun installLayoutGuard(layout: ViewGroup) {
+        layout.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            for (i in 0 until layout.childCount) {
+                val child = layout.getChildAt(i)
                 val name = try {
-                    view.resources.getResourceEntryName(view.id)
+                    child.resources.getResourceEntryName(child.id)
                 } catch (_: Exception) {
                     null
                 }
-                if (name == "edge_toolbar_copilot" || name == "edge_account_avatar") {
-                    view.visibility = View.GONE
-                    forceHiddenViews.add(view)
+                if (name in EXTRA_VIEW_NAMES && child.visibility != View.GONE) {
+                    hideViewPermanently(child)
                 }
             }
-        })
-        XposedHelpers.findAndHookMethod(
-            View::class.java,
-            "setVisibility",
-            Int::class.javaPrimitiveType,
-            object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    if (param.args[0] != View.GONE && param.thisObject in forceHiddenViews) {
-                        param.args[0] = View.GONE
-                    }
-                }
-            }
-        )
+        }
     }
 
     /**
@@ -167,8 +178,15 @@ object TabletToolbar {
      * 点“→”展开的更多收藏弹窗保持 Edge 默认样式不变
      */
     fun scaleBookmarkBarHeight(percent: Int) = afterAttach {
-        if (percent !in 50..99) return@afterAttach
-        applyBookmarkBarScaling(classLoader, percent)
+        if (percent >= 100) {
+            log("收藏夹栏高度设为 100%，保持默认尺寸不进行缩放")
+            return@afterAttach
+        }
+        if (percent !in 50..99) {
+            log("收藏夹栏高度百分比 $percent 超出有效范围 50..99，已忽略")
+            return@afterAttach
+        }
+        applyBookmarkBarScaling(getChromeClassLoader(), percent)
     }
 
     /**

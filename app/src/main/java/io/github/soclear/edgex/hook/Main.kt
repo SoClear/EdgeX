@@ -13,6 +13,10 @@ import java.io.File
 class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
     private lateinit var modulePath: String
 
+    companion object {
+        private val json = Json { ignoreUnknownKeys = true }
+    }
+
     override fun initZygote(startupParam: IXposedHookZygoteInit.StartupParam) {
         modulePath = startupParam.modulePath
     }
@@ -32,7 +36,7 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
 
         val preference: Preference = try {
             val dataStoreFile = File(lpparam.appInfo.dataDir, "files/datastore/${Preference.FILE_NAME}")
-            Json { ignoreUnknownKeys = true }.decodeFromString<Preference>(dataStoreFile.readText())
+            json.decodeFromString<Preference>(dataStoreFile.readText())
         } catch (_: Exception) {
             null
         } ?: run {

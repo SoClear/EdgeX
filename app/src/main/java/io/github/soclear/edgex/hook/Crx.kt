@@ -201,7 +201,7 @@ object Crx {
                 it.returnType == Void.TYPE &&
                 it.parameterTypes.size == 2 &&
                 it.parameterTypes[0] == Int::class.javaPrimitiveType &&
-                it.parameterTypes[1] == Object::class.java
+                it.parameterTypes[1] == Any::class.java
         }
 
         return installMethod?.also {
