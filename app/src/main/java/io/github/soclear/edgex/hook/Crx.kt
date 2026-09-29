@@ -55,7 +55,6 @@ object Crx {
             try {
                 XposedBridge.hookMethod(nativeIntentMethod, intentHook)
                 nativeIntentHooked = true
-                logCrx("Hooked intent method: ${nativeIntentMethod.name}")
             } catch (t: Throwable) {
                 logCrx("Failed to hook intent method", t)
             }
@@ -72,7 +71,6 @@ object Crx {
                     intentHook
                 )
                 nativeIntentHooked = true
-                logCrx("Hooked onMAMNewIntent")
             } catch (t: Throwable) {
                 logCrx("Failed to hook onMAMNewIntent", t)
             }
@@ -283,7 +281,6 @@ object Crx {
                 CRX_COMPATIBILITY_HANDLED_INTENT_FIELD,
                 intent
             )
-            logCrx("Dispatched CRX install request: $crxPath")
             return true
         } catch (t: Throwable) {
             logCrx("Failed to dispatch CRX install request", t)

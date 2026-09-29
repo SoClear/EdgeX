@@ -69,8 +69,8 @@ object LongClick {
                     classLoader
                 )
             onLongClickOverflowButton(methodOverflowButtonOnLongClick)
-        } catch (_: Exception) {
-
+        } catch (t: Throwable) {
+            log("安装更多按钮长按 Hook 失败", t)
         }
     }
 

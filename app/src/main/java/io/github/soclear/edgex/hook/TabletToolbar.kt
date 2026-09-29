@@ -46,19 +46,6 @@ object TabletToolbar {
     private fun scalePx(value: Int, percent: Int): Int = (value * percent / 100f).roundToInt()
 
     /**
-     * Edge 采用了 App Bundle (Isolated Split APKs)，核心 Chromium 代码存放在 split_chrome.apk 中。
-     * 在 Application.attach 时 ClassLoader 默认仅包含 base.apk，需通过 split context 获取。
-     */
-    private fun Context.getChromeClassLoader(): ClassLoader {
-        return try {
-            createContextForSplit("chrome").classLoader
-        } catch (t: Throwable) {
-            log("获取 split_chrome classLoader 失败，回退到 base classLoader", t)
-            classLoader
-        }
-    }
-
-    /**
      * hook 平板工具栏的 inflate 时机
      */
     private fun hookToolbarTabletInflate(classLoader: ClassLoader, action: (ViewGroup) -> Unit): Boolean {
@@ -92,11 +79,8 @@ object TabletToolbar {
      * - 地址栏为 weight 布局，按钮腾出空间后自动加长
      */
     fun syncTabletToolbarWithDesktop() = afterAttach {
-        val installed = hookToolbarTabletInflate(getChromeClassLoader()) { toolbar ->
+        hookToolbarTabletInflate(classLoader) { toolbar ->
             hideToolbarExtras(toolbar)
-        }
-        if (installed) {
-            log("已注册平板工具栏同步 hook")
         }
     }
 
@@ -124,7 +108,6 @@ object TabletToolbar {
         val avatar = layout.findViewByName("edge_account_avatar")
         if (avatar != null) {
             hideViewPermanently(avatar)
-            log("已隐藏用户头像")
         } else {
             log("未找到平板工具栏头像 edge_account_avatar")
         }
@@ -138,7 +121,6 @@ object TabletToolbar {
             layout.removeView(refresh)
             val index = if (anchor != null) layout.indexOfChild(anchor) else layout.childCount
             layout.addView(refresh, index.coerceIn(0, layout.childCount), params)
-            log("刷新按钮已移动到地址栏左侧 index=$index")
         } else {
             log("未找到平板工具栏刷新按钮 refresh_button")
         }
@@ -179,14 +161,13 @@ object TabletToolbar {
      */
     fun scaleBookmarkBarHeight(percent: Int) = afterAttach {
         if (percent >= 100) {
-            log("收藏夹栏高度设为 100%，保持默认尺寸不进行缩放")
             return@afterAttach
         }
         if (percent !in 50..99) {
             log("收藏夹栏高度百分比 $percent 超出有效范围 50..99，已忽略")
             return@afterAttach
         }
-        applyBookmarkBarScaling(getChromeClassLoader(), percent)
+        applyBookmarkBarScaling(classLoader, percent)
     }
 
     /**
@@ -225,7 +206,6 @@ object TabletToolbar {
                     }
                 }
             })
-            log("已注册收藏夹栏高度缩放 hook: $percent%")
         } catch (t: Throwable) {
             log("注册收藏夹栏高度缩放 hook 失败", t)
         }

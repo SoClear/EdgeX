@@ -68,7 +68,6 @@ object SettingsButton {
     }
 
     private fun showModuleSettingsDialog(activity: Activity) {
-        XposedBridge.log("[EdgeX][SettingsButton] 点击了 EDGEX 菜单，准备展示设置弹窗")
         Handler(Looper.getMainLooper()).post {
             try {
                 // ComponentDialog 自身就是完美的 LifecycleOwner
@@ -105,7 +104,6 @@ object SettingsButton {
                     }
                 })
                 dialog.show()
-                XposedBridge.log("[EdgeX][SettingsButton] 设置弹窗已成功弹出")
             } catch (e: Exception) {
                 XposedBridge.log("[EdgeX][SettingsButton] 展示设置弹窗失败: ${e.message}")
                 XposedBridge.log(e)

@@ -7,6 +7,7 @@ import android.os.Bundle
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
+import io.github.soclear.edgex.hook.util.getChromeClassLoader
 
 
 object BrowsingData {
@@ -63,7 +64,7 @@ object BrowsingData {
                 // ✅ onTaskRemoved 被成功触发！应用正在被划掉，开始执行清除逻辑")
                 try {
                     // 关键1：安全地获取当前 App 的真正的 ClassLoader，防止外部闭包传参带来的类加载器不匹配
-                    val appClassLoader = service.applicationContext.classLoader
+                    val appClassLoader = service.getChromeClassLoader()
                     val profileManagerClass = XposedHelpers.findClassIfExists("org.chromium.chrome.browser.profiles.ProfileManager", appClassLoader) ?: return
                     val profile = XposedHelpers.callStaticMethod(profileManagerClass, "b") ?: return
                     val bridgeClass = XposedHelpers.findClass("org.chromium.chrome.browser.browsing_data.BrowsingDataBridge", appClassLoader)

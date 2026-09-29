@@ -1,5 +1,6 @@
 package io.github.soclear.edgex.hook.util
 
+import android.app.Activity
 import android.app.AndroidAppHelper
 import android.app.Application
 import android.content.Context
@@ -44,10 +45,21 @@ fun LoadPackageParam.getSharedPreferences(name: String): SharedPreferences = get
 fun getPackageVersionCode(name: String = AndroidAppHelper.currentPackageName()): Long =
     getSystemContext().packageManager.getPackageInfo(name, 0).longVersionCode
 
+fun Context.getChromeContext(): Context {
+    return try {
+        createContextForSplit("chrome")
+    } catch (_: Throwable) {
+        this
+    }
+}
+
+fun Context.getChromeClassLoader(): ClassLoader = getChromeContext().classLoader
+
 fun afterAttach(action: Context.() -> Unit) {
     val callback = object : XC_MethodHook() {
         override fun afterHookedMethod(param: MethodHookParam) {
-            action(param.args[0] as Context)
+            val baseContext = param.args[0] as Context
+            action(baseContext.getChromeContext())
         }
     }
     findAndHookMethod(Application::class.java, "attach", Context::class.java, callback)
@@ -64,6 +76,8 @@ val Class<*>.allFields: List<Field>
         return fields
     }
 
+private var cachedResourcesLoader: ResourcesLoader? = null
+
 fun addAssetPath(modulePath: String) {
     findAndHookMethod(
         ContextWrapper::class.java,
@@ -71,15 +85,19 @@ fun addAssetPath(modulePath: String) {
         Context::class.java,
         object : XC_MethodHook() {
             override fun afterHookedMethod(param: MethodHookParam) {
-                val context = param.thisObject as Context
-                if (context !is Application) return
+                val context = param.thisObject as? Context ?: return
+                if (context !is Application && context !is Activity) return
                 try {
-                    val moduleApk = File(modulePath)
-                    val parcelFileDescriptor = ParcelFileDescriptor.open(moduleApk, ParcelFileDescriptor.MODE_READ_ONLY)
-                    val resourcesProvider = ResourcesProvider.loadFromApk(parcelFileDescriptor)
-                    val resourcesLoader = ResourcesLoader()
-                    resourcesLoader.addProvider(resourcesProvider)
-                    context.resources.addLoaders(resourcesLoader)
+                    val loader = cachedResourcesLoader ?: run {
+                        val moduleApk = File(modulePath)
+                        val parcelFileDescriptor = ParcelFileDescriptor.open(moduleApk, ParcelFileDescriptor.MODE_READ_ONLY)
+                        val resourcesProvider = ResourcesProvider.loadFromApk(parcelFileDescriptor)
+                        val resourcesLoader = ResourcesLoader()
+                        resourcesLoader.addProvider(resourcesProvider)
+                        cachedResourcesLoader = resourcesLoader
+                        resourcesLoader
+                    }
+                    context.resources.addLoaders(loader)
                 } catch (t: Throwable) {
                     XposedBridge.log(t)
                 }

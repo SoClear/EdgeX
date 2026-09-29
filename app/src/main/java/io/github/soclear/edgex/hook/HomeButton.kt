@@ -99,16 +99,44 @@ object HomeButton {
         )
     }
 
+    private fun getExistingOnClickListener(view: View): View.OnClickListener? {
+        return try {
+            val listenerInfo = XposedHelpers.getObjectField(view, "mListenerInfo")
+            listenerInfo?.let { XposedHelpers.getObjectField(it, "mOnClickListener") as? View.OnClickListener }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun getExistingOnLongClickListener(view: View): View.OnLongClickListener? {
+        return try {
+            val listenerInfo = XposedHelpers.getObjectField(view, "mListenerInfo")
+            listenerInfo?.let { XposedHelpers.getObjectField(it, "mOnLongClickListener") as? View.OnLongClickListener }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     private fun registerNewTabButton(button: View) {
         if (homeButtonStates.containsKey(button)) {
             return
         }
-        homeButtonStates[button] = HomeButtonState()
+        val state = HomeButtonState()
+        val existingClick = getExistingOnClickListener(button)
+        if (existingClick != null && existingClick !== state) {
+            state.originalClick = existingClick
+        }
+        val existingLongClick = getExistingOnLongClickListener(button)
+        if (existingLongClick != null && existingLongClick !== state) {
+            state.originalLongClick = existingLongClick
+        }
+        homeButtonStates[button] = state
         try {
             XposedHelpers.callMethod(button, "setImageResource", R.drawable.home)
         } catch (t: Throwable) {
             logHomeButton("替换 Home 图标失败: ${button.javaClass.name}", t)
         }
+        applyHomeButtonListeners(button, state)
     }
 
     private fun onNewTabButtonClickListenerChanged(

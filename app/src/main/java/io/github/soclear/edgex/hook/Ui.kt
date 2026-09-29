@@ -47,17 +47,44 @@ object Ui {
         val loadUrlParamsClass = XposedHelpers.findClassIfExists(
             "org.chromium.content_public.browser.LoadUrlParams",
             classLoader
-        ) ?: return@afterAttach
+        ) ?: run {
+            XposedBridge.log("[EdgeX][Ui] 未找到 LoadUrlParams 类")
+            return@afterAttach
+        }
+
+        val gurlClass = XposedHelpers.findClassIfExists(
+            "org.chromium.url.GURL",
+            classLoader
+        )
+
+        fun isNtpUrl(url: String?): Boolean {
+            return url == "chrome-native://newtab/" ||
+                url == "edge://newtab/" ||
+                url == "chrome://newtab/"
+        }
 
         XposedBridge.hookAllConstructors(loadUrlParamsClass, object : XC_MethodHook() {
             override fun beforeHookedMethod(param: MethodHookParam) {
-                val url = param.args.firstOrNull() as? String ?: return
-
-                if (url == "chrome-native://newtab/" ||
-                    url == "edge://newtab/" ||
-                    url == "chrome://newtab/"
-                ) {
-                    param.args[0] = customUrl
+                for (i in param.args.indices) {
+                    val arg = param.args[i] ?: continue
+                    if (arg is String) {
+                        if (isNtpUrl(arg)) {
+                            param.args[i] = customUrl
+                        }
+                    } else if (gurlClass != null && gurlClass.isInstance(arg)) {
+                        val spec = try {
+                            XposedHelpers.getObjectField(arg, "a") as? String
+                        } catch (_: Throwable) {
+                            null
+                        } ?: arg.toString()
+                        if (isNtpUrl(spec)) {
+                            try {
+                                param.args[i] = XposedHelpers.newInstance(gurlClass, customUrl)
+                            } catch (t: Throwable) {
+                                XposedBridge.log(t)
+                            }
+                        }
+                    }
                 }
             }
         })

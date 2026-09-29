@@ -43,11 +43,6 @@ class Main : IXposedHookLoadPackage, IXposedHookZygoteInit {
             XposedBridge.log("[EdgeX][Main] 偏好配置缺失或解析失败，模块功能未启用")
             return
         }
-        XposedBridge.log(
-            "[EdgeX][Main] 配置已加载: syncTabletToolbar=${preference.syncTabletToolbar}, " +
-                "adjustUiSize=${preference.adjustUiSize}, " +
-                "bookmarkBarHeightPercent=${preference.bookmarkBarHeightPercent}"
-        )
 
         if (preference.hideStatusBar) {
             Ui.hideStatusBar()

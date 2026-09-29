@@ -12,5 +12,7 @@ keystore.properties
 *.keystore
 *.jks
 
-# AI
+# IDE & AI
 .trae
+.agents
+.vscode
