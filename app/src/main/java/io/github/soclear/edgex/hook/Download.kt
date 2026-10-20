@@ -225,7 +225,7 @@ object Download {
             }
 
             var hookConfig = getHookConfig { getHookConfigFromDexKit() }
-            if (hookConfig != null && (hookConfig.methodDangerousDownloadConfirm == null || hookConfig.methodDangerousDownloadCondition == null)) {
+            if (hookConfig != null && hookConfig.downloadDialogHookVersion < 1) {
                 // 旧缓存未包含下载相关方法，清除并重新解析生成
                 File(filesDir, "EdgeXHookConfig.json").delete()
                 hookConfig = getHookConfig { getHookConfigFromDexKit() }
@@ -251,6 +251,27 @@ object Download {
                                     if (callback != null) {
                                         XposedHelpers.callMethod(callback, "onResult", true)
                                     }
+                                    param.result = null
+                                } catch (t: Throwable) {
+                                    XposedBridge.log(t)
+                                }
+                            }
+                        })
+                    } catch (t: Throwable) {
+                        XposedBridge.log(t)
+                    }
+                }
+
+                hookConfig.methodDownloadWarningConfirm?.let { descriptor ->
+                    try {
+                        val method = DexMethod(descriptor).getMethodInstance(classLoader)
+                        XposedBridge.hookMethod(method, object : XC_MethodHook() {
+                            override fun beforeHookedMethod(param: MethodHookParam) {
+                                try {
+                                    val callback = param.args[5] ?: return
+                                    // Edge 155 使用 Callback<Integer>：1 为确认，2 为取消。
+                                    // 必须完成回调再拦截，否则 native 下载会一直等待确认。
+                                    XposedHelpers.callMethod(callback, "onResult", 1)
                                     param.result = null
                                 } catch (t: Throwable) {
                                     XposedBridge.log(t)
