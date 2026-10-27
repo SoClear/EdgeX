@@ -373,7 +373,6 @@ object Download {
                                 )
                             }
                         } else if (isValidActivity) {
-                            cancelEdgeDownload(guid, otrProfileId)
                             showExternalDownloadDialog(
                                 activity,
                                 fileName,
@@ -382,7 +381,9 @@ object Download {
                                 cookie,
                                 userAgent,
                                 referrer,
-                                mimeType
+                                mimeType,
+                                onShown = { cancelEdgeDownload(guid, otrProfileId) },
+                                onFailure = { handledGuids.remove(guid) }
                             )
                         } else {
                             // 没有可用 Activity 弹窗，又未设默认下载器：放行 Edge 原生下载，
@@ -459,15 +460,22 @@ object Download {
                     cookie: String?,
                     userAgent: String?,
                     referrer: String?,
-                    mimeType: String?
+                    mimeType: String?,
+                    onShown: () -> Unit,
+                    onFailure: () -> Unit
                 ) {
                     Handler(Looper.getMainLooper()).post {
-                        if (activity.isFinishing || activity.isDestroyed) return@post
+                        if (activity.isFinishing || activity.isDestroyed) {
+                            onFailure()
+                            return@post
+                        }
                         try {
+                            // 模块资源注入在 Activity.attach 完成后；afterAttach 的 split Context
+                            // 不保证包含模块资源，按钮文字必须从当前 Activity 读取。
                             AlertDialog.Builder(activity)
                                 .setTitle(fileName)
                                 .setView(createUrlContainer(activity, totalBytes, url))
-                                .setPositiveButton(getString(R.string.download_system)) { _, _ ->
+                                .setPositiveButton(activity.getString(R.string.download_system)) { _, _ ->
                                     systemDownload(
                                         url,
                                         cookie,
@@ -478,7 +486,7 @@ object Download {
                                         activity
                                     )
                                 }
-                                .setNegativeButton(getString(R.string.download_third_party)) { _, _ ->
+                                .setNegativeButton(activity.getString(R.string.download_third_party)) { _, _ ->
                                     thirdPartyDownload(
                                         url,
                                         mimeType,
@@ -489,7 +497,7 @@ object Download {
                                         null
                                     )
                                 }
-                                .setNeutralButton(getString(R.string.download_copy_link)) { _, _ ->
+                                .setNeutralButton(activity.getString(R.string.download_copy_link)) { _, _ ->
                                     copyLink(activity, url)
                                 }
                                 .setOnDismissListener {
@@ -497,7 +505,10 @@ object Download {
                                 }
                                 .create()
                                 .show()
+                            // 弹窗成功展示后才取消原生下载，避免资源或窗口异常导致下载丢失。
+                            onShown()
                         } catch (t: Throwable) {
+                            onFailure()
                             XposedBridge.log(t)
                         }
                     }
@@ -576,7 +587,7 @@ object Download {
                         )
                         if (!mimeType.isNullOrBlank()) setMimeType(mimeType)
                         setTitle(fileName)
-                        setDescription(getString(R.string.download_downloading))
+                        setDescription(context.getString(R.string.download_downloading))
                         setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                         setDestinationInExternalPublicDir(
                             Environment.DIRECTORY_DOWNLOADS,
@@ -634,7 +645,7 @@ object Download {
                             val chooser =
                                 Intent.createChooser(
                                     intent,
-                                    getString(R.string.download_chooser_title)
+                                    context.getString(R.string.download_chooser_title)
                                 )
                             chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             context.startActivity(chooser)
@@ -702,7 +713,7 @@ object Download {
                             if (!isLaunched) {
                                 Toast.makeText(
                                     context,
-                                    getString(R.string.download_target_app_failed),
+                                    context.getString(R.string.download_target_app_failed),
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
@@ -710,7 +721,7 @@ object Download {
                     } catch (_: ActivityNotFoundException) {
                         Toast.makeText(
                             context,
-                            getString(R.string.download_no_app_found),
+                            context.getString(R.string.download_no_app_found),
                             Toast.LENGTH_SHORT
                         ).show()
                     } catch (t: Throwable) {
@@ -722,13 +733,13 @@ object Download {
                     val clipboard =
                         activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     val clip = ClipData.newPlainText(
-                        getString(R.string.download_clipboard_label),
+                        activity.getString(R.string.download_clipboard_label),
                         url
                     )
                     clipboard.setPrimaryClip(clip)
                     Toast.makeText(
                         activity,
-                        getString(R.string.download_copied_toast),
+                        activity.getString(R.string.download_copied_toast),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
