@@ -6,7 +6,6 @@ import android.app.Application
 import android.content.Context
 import android.content.Context.CONTEXT_IGNORE_SECURITY
 import android.content.Context.MODE_PRIVATE
-import android.content.ContextWrapper
 import android.content.SharedPreferences
 import android.content.res.loader.ResourcesLoader
 import android.content.res.loader.ResourcesProvider
@@ -79,31 +78,32 @@ val Class<*>.allFields: List<Field>
 private var cachedResourcesLoader: ResourcesLoader? = null
 
 fun addAssetPath(modulePath: String) {
-    findAndHookMethod(
-        ContextWrapper::class.java,
-        "attachBaseContext",
-        Context::class.java,
-        object : XC_MethodHook() {
-            override fun afterHookedMethod(param: MethodHookParam) {
-                val context = param.thisObject as? Context ?: return
-                if (context !is Application && context !is Activity) return
-                try {
-                    val loader = cachedResourcesLoader ?: run {
-                        val moduleApk = File(modulePath)
-                        val parcelFileDescriptor = ParcelFileDescriptor.open(moduleApk, ParcelFileDescriptor.MODE_READ_ONLY)
-                        val resourcesProvider = ResourcesProvider.loadFromApk(parcelFileDescriptor)
-                        val resourcesLoader = ResourcesLoader()
-                        resourcesLoader.addProvider(resourcesProvider)
-                        cachedResourcesLoader = resourcesLoader
-                        resourcesLoader
+    val callback = object : XC_MethodHook() {
+        override fun afterHookedMethod(param: MethodHookParam) {
+            if (param.hasThrowable()) return
+            val context = param.thisObject as? Context ?: return
+            try {
+                val loader = cachedResourcesLoader ?: run {
+                    val resourcesProvider = ParcelFileDescriptor.open(
+                        File(modulePath), ParcelFileDescriptor.MODE_READ_ONLY
+                    ).use { ResourcesProvider.loadFromApk(it) }
+                    ResourcesLoader().apply {
+                        addProvider(resourcesProvider)
+                        cachedResourcesLoader = this
                     }
-                    context.resources.addLoaders(loader)
-                } catch (t: Throwable) {
-                    XposedBridge.log(t)
                 }
+                context.resources.addLoaders(loader)
+            } catch (t: Throwable) {
+                XposedBridge.log(t)
             }
         }
-    )
+    }
+
+    // ContextWrapper.attachBaseContext 返回时，Edge 的 attachBaseContext 覆写仍在执行。
+    // 此时读取 Activity.resources 会使后续 applyOverrideConfiguration 抛出异常。
+    // 等外层 attach 完整结束后再注入，确保语言、密度等配置已应用。
+    findAndHookMethod(Application::class.java, "attach", Context::class.java, callback)
+    XposedBridge.hookAllMethods(Activity::class.java, "attach", callback)
 }
 
 fun xlog(string: String) {
