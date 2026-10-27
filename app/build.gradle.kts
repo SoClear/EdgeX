@@ -17,8 +17,8 @@ android {
         applicationId = "io.github.soclear.edgex"
         minSdk = 30
         targetSdk = 37
-        versionCode = 15
-        versionName = "2.5.0"
+        versionCode = 16
+        versionName = "2.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
