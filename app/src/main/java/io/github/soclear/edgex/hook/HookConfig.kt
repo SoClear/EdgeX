@@ -30,15 +30,7 @@ internal data class EdgeHookConfig(
     // 用于底部更多按钮长按回调中获取 Tab 对象
     val fieldActivityTabProvider: String,
     // 用于底部更多按钮长按回调中的 Tab 加载指定 url
-    val methodLoadUrl: String,
-    // DangerousDownloadDialogBridge.showDialog 调用的条件检查方法 (ffe.b)
-    val methodDangerousDownloadCondition: String? = null,
-    // DangerousDownloadDialogBridge.showDialog 调用的静态底部弹窗展示方法 (vee.a)
-    val methodDangerousDownloadConfirm: String? = null,
-    // Edge 155+ 的 ModalDialog 确认方法，Callback<Integer> 中 1 表示确认
-    val methodDownloadWarningConfirm: String? = null,
-    // 独立于 Edge 版本，升级模块后也需要刷新旧的下载方法缓存
-    val downloadDialogHookVersion: Int = 0
+    val methodLoadUrl: String
 ) : HookConfig
 
 internal fun Context.getHookConfigFromDexKit(): EdgeHookConfig? {
@@ -179,51 +171,6 @@ internal fun Context.getHookConfigFromDexKit(): EdgeHookConfig? {
             }
         }.singleOrNull() ?: return null
 
-        val dangerousBridge = bridge.findClass {
-            matcher {
-                className = "org.chromium.chrome.browser.download.DangerousDownloadDialogBridge"
-            }
-        }.singleOrNull()
-        val showDialogMethod = dangerousBridge?.findMethod {
-            matcher {
-                name = "showDialog"
-            }
-        }?.singleOrNull()
-
-        val methodDangerousDownloadCondition = showDialogMethod?.invokes?.findMethod {
-            matcher {
-                modifiers = Modifier.STATIC
-                paramTypes()
-                returnType = "boolean"
-            }
-        }?.singleOrNull()?.toDexMethod()?.serialize()
-
-        val methodDangerousDownloadConfirm = showDialogMethod?.invokes?.findMethod {
-            matcher {
-                modifiers = Modifier.STATIC
-                paramTypes("java.lang.String", "long", "org.chromium.base.Callback")
-                returnType = "void"
-            }
-        }?.singleOrNull()?.toDexMethod()?.serialize()
-
-        // 新版 presenter 不一定由 showDialog 直接调用（可能先等待 Activity 恢复）。
-        // 用下载专属的统计字符串和完整签名定位，兼容这两条调用路径。
-        val methodDownloadWarningConfirm = bridge.findMethod {
-            matcher {
-                modifiers = Modifier.STATIC
-                returnType = "void"
-                usingStrings("Download.DangerousDialog.Events")
-            }
-        }.singleOrNull {
-            val types = it.paramTypes.map { type -> type.name }
-            // 第二个参数 ModalDialogManager 在 Edge 中被混淆。
-            types.size == 7 && types[0] == "android.app.Activity" &&
-                types.drop(2) == listOf(
-                    "java.lang.String", "long", "java.lang.String",
-                    "org.chromium.base.Callback", "boolean"
-                )
-        }?.toDexMethod()?.serialize()
-
         return EdgeHookConfig(
             versionCode = packageManager.getPackageInfo(packageName, 0).longVersionCode,
             methodLaunchNtp = methodLaunchNtp.toDexMethod().serialize(),
@@ -236,11 +183,7 @@ internal fun Context.getHookConfigFromDexKit(): EdgeHookConfig? {
             methodThatCallNewTabButtonSetOnClickListener = methodThatCallNewTabButtonSetOnClickListener.toDexMethod()
                 .serialize(),
             fieldNameNewTabButtonActivityProvider = fieldNameNewTabButtonActivityProvider,
-            methodLoadUrl = methodLoadUrl.toDexMethod().serialize(),
-            methodDangerousDownloadCondition = methodDangerousDownloadCondition,
-            methodDangerousDownloadConfirm = methodDangerousDownloadConfirm,
-            methodDownloadWarningConfirm = methodDownloadWarningConfirm,
-            downloadDialogHookVersion = 1
+            methodLoadUrl = methodLoadUrl.toDexMethod().serialize()
         )
     }
 }
