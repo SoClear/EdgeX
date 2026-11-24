@@ -128,7 +128,7 @@ object Download {
                     val request = readRequest(info)
                     when {
                         request == null -> false
-                        setDefaultDownloader && !dangerous -> {
+                        setDefaultDownloader -> {
                             val context = activity ?: AndroidAppHelper.currentApplication()
                             downloadDefault(request, context)
                             true
@@ -227,19 +227,11 @@ object Download {
                 request: DownloadRequest,
                 dangerous: Boolean
             ) {
-                val actions = if (dangerous && setDefaultDownloader) {
-                    listOf(
-                        (if (defaultDownloaderType == DownloaderType.SYSTEM_DOWNLOADER)
-                            R.string.download_system else R.string.download_third_party) to
-                            { downloadDefault(request, activity) }
-                    )
-                } else {
-                    listOf(
-                        R.string.download_system to { downloadWithSystem(request, activity) },
-                        R.string.download_third_party to { downloadWithApp(request, activity, null) },
-                        R.string.download_copy_link to { copyLink(activity, request.url) }
-                    )
-                }
+                val actions = listOf(
+                    R.string.download_system to { downloadWithSystem(request, activity) },
+                    R.string.download_third_party to { downloadWithApp(request, activity, null) },
+                    R.string.download_copy_link to { copyLink(activity, request.url) }
+                )
                 val dialog = AlertDialog.Builder(activity)
                     .setTitle(request.fileName)
                     .setItems(actions.map { activity.getString(it.first) }.toTypedArray(), null)
