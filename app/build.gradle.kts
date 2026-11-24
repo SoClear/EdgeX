@@ -10,8 +10,11 @@ plugins {
 android {
     namespace = "io.github.soclear.edgex"
     compileSdk {
-        version = release(37)
+        version = release(37) {
+            minorApiLevel = 1
+        }
     }
+    ndkVersion = "30.0.16248370"
 
     defaultConfig {
         applicationId = "io.github.soclear.edgex"
@@ -58,6 +61,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_25
         targetCompatibility = JavaVersion.VERSION_25
+    }
+    lint {
+        toolchain.languageVersion = JavaLanguageVersion.of(25)
     }
     buildFeatures {
         compose = true

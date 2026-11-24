@@ -18,12 +18,8 @@
 <string name="bookmark_bar_height_label">收藏夹栏高度（%1$d–%2$d）</string>
 <string name="percent_invalid">请输入 %1$d 到 %2$d 之间的数值</string>
 <string name="confirm">确认</string>
-<string name="module_disabled_tip">请在 LSPosed 中启用本模块</string>
-<string name="close">关闭</string>
 <string name="download_system">系统下载器</string>
 <string name="download_downloading">下载中…</string>
-<string name="download_size_calculating">正在获取大小…</string>
-<string name="download_size_unknown">未知大小</string>
 <string name="download_third_party">第三方应用</string>
 <string name="download_chooser_title">请选择下载工具或播放器</string>
 <string name="download_no_app_found">未找到可以处理该链接的应用</string>

@@ -20,6 +20,9 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
+      - name: Install Android SDK and NDK
+        run: sdkmanager 'platforms;android-37.1' 'ndk;30.0.16248370'
+
       # 解码并保存 Keystore 文件
       - name: Decode Keystore
         run: |

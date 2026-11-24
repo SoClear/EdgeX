@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -416,10 +417,9 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 }
             }
         )
-        val context= LocalContext.current
+        val context = LocalContext.current
         ListItem(
-            headlineContent = {Text(stringResource(R.string.open_crx_install_activity_item_title)) },
-            supportingContent =  {Text(stringResource(R.string.open_crx_install_activity_item_descriptor))},
+            supportingContent = { Text(stringResource(R.string.open_crx_install_activity_item_descriptor)) },
             modifier = Modifier.clickable {
                 try {
                     val intent=Intent()
@@ -429,8 +429,10 @@ fun MainScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     Toast.makeText(context, R.string.open_crx_install_activity_item_on_exception, Toast.LENGTH_LONG).show()
                     XposedBridge.log(e)
                 }
-            },
-        )
+            }
+        ) {
+            Text(stringResource(R.string.open_crx_install_activity_item_title))
+        }
         SwitchItem(
             title = stringResource(R.string.crx_install_compatibility_title),
             checked = preference.crxInstallCompatibility,
@@ -618,7 +620,7 @@ fun TimePeriodConfigDialog(
     onDismiss: () -> Unit,
     onConfirm: (Int) -> Unit
 ) {
-    var tempPeriod by remember { mutableStateOf(initialPeriod) }
+    var tempPeriod by remember { mutableIntStateOf(initialPeriod) }
     val options = listOf(
         0 to stringResource(R.string.time_range_last_hour),
         1 to stringResource(R.string.time_range_last_24_hours),
